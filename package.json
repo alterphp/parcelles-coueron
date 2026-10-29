@@ -1,0 +1,12 @@
+{
+  "name": "parcelles-coueron",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Carte des parcelles cadastrales de Couëron filtrées par surface, avec fonds satellite, plan cadastral et aperçu de rue.",
+  "scripts": {
+    "data": "sh scripts/fetch-data.sh && python3 scripts/fetch_dvf.py",
+    "start": "python3 -m http.server 8084",
+    "test": "node --test tests/parcels.test.mjs tests/dvf-plu.test.mjs && python3 -m unittest discover -s tests"
+  }
+}

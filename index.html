@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parcelles de Couëron</title>
+  <meta name="description" content="Carte des parcelles cadastrales de Couëron filtrées par surface, avec fonds satellite, plan cadastral et aperçu de rue.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside class="sidebar" aria-label="Filtres et résultats">
+    <header class="sidebar__head">
+      <h1>Parcelles de Couëron <small>Cadastre Etalab · INSEE 44047</small></h1>
+
+      <form id="filters" class="filters" autocomplete="off">
+        <div class="filters__row">
+          <label class="field" for="min"><span class="field__label">Surface min <em>(m²)</em></span>
+            <input id="min" name="min" type="number" min="0" step="50" inputmode="numeric">
+          </label>
+          <label class="field" for="max"><span class="field__label">Surface max <em>(m²)</em></span>
+            <input id="max" name="max" type="number" min="0" step="50" inputmode="numeric" placeholder="sans limite">
+          </label>
+        </div>
+        <div class="presets" id="presets" role="group" aria-label="Plages de surface prédéfinies"></div>
+        <label class="field" for="section"><span class="field__label">Section cadastrale</span>
+          <select id="section" name="section"><option value="">Toutes</option></select>
+        </label>
+      </form>
+
+      <p class="status" id="status" role="status">Chargement du cadastre…</p>
+
+      <div class="tools">
+        <label for="sort" class="visually-hidden">Trier la liste</label>
+        <select id="sort">
+          <option value="desc">Plus grandes d'abord</option>
+          <option value="asc">Plus petites d'abord</option>
+          <option value="ref">Par référence</option>
+        </select>
+        <button type="button" id="export" class="btn btn--primary" disabled>Exporter CSV</button>
+      </div>
+
+      <div class="fallback" id="fallback" hidden>
+        <p>Le cadastre n'a pas pu être téléchargé automatiquement.</p>
+        <p>Téléchargez <a id="fallbackLink" target="_blank" rel="noopener">le fichier des parcelles</a>, puis chargez-le :</p>
+        <input type="file" id="file" accept=".json,.geojson,.gz">
+      </div>
+    </header>
+
+    <ol class="list" id="list" aria-label="Parcelles éligibles"></ol>
+  </aside>
+
+  <main id="map" aria-label="Carte"></main>
+
+  <section class="street" id="street" hidden aria-labelledby="streetTitle">
+    <header class="street__head">
+      <div>
+        <h2 id="streetTitle">—</h2>
+        <p class="street__meta" id="streetMeta"></p>
+      </div>
+      <button type="button" class="btn btn--icon" id="closeStreet" aria-label="Fermer l'aperçu">✕</button>
+    </header>
+
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tabPnx" aria-controls="panePnx" aria-selected="true">Panoramax</button>
+      <button type="button" role="tab" id="tabGsv" aria-controls="paneGsv" aria-selected="false">Google Street View</button>
+    </div>
+
+    <div class="pane" id="panePnx" role="tabpanel" aria-labelledby="tabPnx"></div>
+    <div class="pane" id="paneGsv" role="tabpanel" aria-labelledby="tabGsv" hidden></div>
+
+    <section class="block" aria-labelledby="pluTitle">
+      <h3 id="pluTitle">Urbanisme · PLUm</h3>
+      <div id="pluBody"></div>
+    </section>
+
+    <section class="block" aria-labelledby="dvfTitle">
+      <h3 id="dvfTitle">Ventes DVF</h3>
+      <div id="dvfBody"></div>
+    </section>
+
+    <nav class="street__links" id="streetLinks" aria-label="Ouvrir ailleurs"></nav>
+  </section>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

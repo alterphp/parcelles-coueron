@@ -1,0 +1,88 @@
+# Publie la carte sur GitHub Pages avec des données à jour.
+# - à chaque push sur main (modification du code) ;
+# - le 2 de chaque mois (nouvelles données cadastre / DVF) ;
+# - à la demande (onglet Actions → « Publier la carte » → Run workflow).
+#
+# Les données ne sont pas versionnées : elles sont retéléchargées à chaque publication.
+# Si une source est indisponible, la version déjà publiée sur Pages est réutilisée.
+
+name: Publier la carte
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 2 * *" # le 2 du mois à 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  INSEE: "44047"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests
+        run: |
+          node --test tests/parcels.test.mjs tests/dvf-plu.test.mjs
+          python3 -m unittest discover -s tests
+
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Cadastre (Etalab)
+        env:
+          SITE: ${{ steps.pages.outputs.base_url }}
+        run: |
+          FILE="data/cadastre-${INSEE}-parcelles.json.gz"
+          if ! sh scripts/fetch-data.sh "$INSEE"; then
+            echo "::warning::Cadastre indisponible, réutilisation de la version publiée"
+            mkdir -p data
+            curl -fL --retry 3 -o "$FILE" "$SITE/$FILE" \
+              || echo "::warning::Aucune version publiée : la page téléchargera le cadastre en direct"
+          fi
+
+      - name: Ventes DVF
+        env:
+          SITE: ${{ steps.pages.outputs.base_url }}
+        run: |
+          FILE="data/dvf-${INSEE}.json"
+          if ! python3 scripts/fetch_dvf.py "$INSEE"; then
+            echo "::warning::DVF indisponible, réutilisation de la version publiée"
+            mkdir -p data
+            curl -fL --retry 3 -o "$FILE" "$SITE/$FILE" \
+              || echo "::warning::Aucune version publiée : le bloc Ventes indiquera que les données manquent"
+          fi
+
+      - name: Assemblage du site
+        run: |
+          mkdir -p _site
+          cp -r index.html css js _site/
+          [ -d data ] && cp -r data _site/ || true
+          date -u +"%Y-%m-%dT%H:%MZ" > _site/data-version.txt
+          ls -la _site _site/data 2>/dev/null || true
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
