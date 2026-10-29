@@ -184,6 +184,16 @@ export function listSections(parcels) {
 /** Libellé lisible : « AB 123 ». */
 export const label = (p) => `${p.section} ${Number(p.numero) || p.numero}`;
 
+/**
+ * Libellé d'une parcelle à partir de son identifiant Etalab / DVF (14 caractères :
+ * commune 5 + préfixe 3 + section 2 + numéro 4), ex. « 44047000AB0012 » → « AB 12 ».
+ * Autre format : l'identifiant tel quel.
+ */
+export function labelFromId(id) {
+  const s = String(id || "");
+  return s.length === 14 ? label({ section: s.slice(8, 10), numero: s.slice(10) }) : s;
+}
+
 /** Export CSV (séparateur « ; » et BOM pour Excel FR). */
 export function toCSV(list) {
   const rows = [["reference", "section", "numero", "surface_m2", "surface_estimee", "latitude", "longitude"]];

@@ -162,6 +162,13 @@ a { color: var(--accent); }
 .sale:last-child { border-bottom: 0; }
 .sale__head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .sale__desc, .sale__where { font-size: 13px; }
+.sale__parcels { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; margin-top: 2px; }
+.parcel-ref { font: inherit; font-size: 12px; padding: 1px 9px; border-radius: 999px;
+              border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+button.parcel-ref { cursor: pointer; color: var(--accent); border-color: var(--accent); }
+button.parcel-ref:hover { background: var(--accent); color: var(--panel); }
+.parcel-ref--current { border-color: var(--select); color: var(--select); font-weight: 600; }
+.parcel-ref--gone { color: var(--muted); border-style: dashed; }
 
 /* --- Écrans étroits : carte en haut, panneaux empilés ---------------------- */
 @media (max-width: 900px) {

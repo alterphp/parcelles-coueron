@@ -29,7 +29,14 @@ const state = {
 
 const map = L.map("map", { preferCanvas: true }).setView(CONFIG.commune.centre, CONFIG.commune.zoom);
 const bases = createBaseLayers();
-bases["Satellite IGN (orthophoto)"].addTo(map);
+const baseLayer = bases["Satellite IGN (orthophoto)"].addTo(map);
+
+// Le zoom ne dépasse jamais celui du fond de carte actif : au-delà, ses tuiles n'existent plus.
+// Sans cela, Leaflet retient le plus grand zoom de toutes les couches affichées, superpositions comprises.
+// Si le zoom courant est trop élevé pour le nouveau fond, la carte revient à son zoom maximal.
+const limitZoomToBase = (layer) => map.setMaxZoom(layer.options.maxZoom);
+limitZoomToBase(baseLayer);
+map.on("baselayerchange", (e) => limitZoomToBase(e.layer));
 const cadastre = createCadastreLayer(); // désactivée par défaut, activable dans le sélecteur de couches
 
 const featureToParcel = new WeakMap();
@@ -406,15 +413,47 @@ async function loadPlu(p) {
 
 /* ---------------------------------------------------------- Ventes (DVF) */
 
-function saleHtml(m, extra = "") {
+const MAX_SALE_PARCELS = 8; // pastilles affichées par vente (les ventes en bloc peuvent en citer des dizaines)
+
+/**
+ * Parcelles d'une vente : un bouton pour celles du cadastre chargé (clic = les afficher sur la carte),
+ * un repère grisé pour celles qui n'y figurent plus (division, fusion, renumérotation depuis la vente).
+ * Vide si la seule parcelle citée est la parcelle déjà sélectionnée.
+ */
+function saleParcelsHtml(m, currentId) {
+  const ids = m.p || [];
+  if (!ids.length || ids.every((id) => id === currentId)) return "";
+  const chip = (id) => {
+    const text = esc(P.labelFromId(id));
+    if (id === currentId) return `<span class="parcel-ref parcel-ref--current" title="Parcelle sélectionnée">${text}</span>`;
+    if (state.byId.has(id)) {
+      return `<button type="button" class="parcel-ref" data-parcel="${esc(id)}" ` +
+             `title="Afficher la parcelle ${esc(id)} sur la carte">${text}</button>`;
+    }
+    return `<span class="parcel-ref parcel-ref--gone" title="Parcelle ${esc(id)} absente du cadastre actuel ` +
+           `(division, fusion ou renumérotation depuis la vente)">${text}</span>`;
+  };
+  const more = ids.length - MAX_SALE_PARCELS;
+  return `<div class="sale__parcels"><span class="muted">Parcelle${ids.length > 1 ? "s" : ""} :</span> ` +
+         ids.slice(0, MAX_SALE_PARCELS).map(chip).join(" ") +
+         (more > 0 ? ` <span class="muted">+ ${more} autre${more > 1 ? "s" : ""}</span>` : "") + "</div>";
+}
+
+function saleHtml(m, extra = "", currentId = "") {
   const ppm = DVF.pricePerM2(m);
   const nature = m.n && m.n !== "Vente" ? ` · ${esc(m.n)}` : "";
   return `<li class="sale">
       <div class="sale__head"><span>${longDate(m.d)}${nature}</span><b>${m.v ? euros(m.v) : "montant non publié"}</b></div>
       <div class="sale__desc">${esc(DVF.describeMutation(m))}${ppm ? ` · <span class="nowrap">${fmt(ppm)} €/m² bâti</span>` : ""}</div>
-      ${extra}
+      ${extra}${saleParcelsHtml(m, currentId)}
     </li>`;
 }
+
+// Un clic sur une parcelle citée dans une vente l'affiche sur la carte (comme un clic sur la liste).
+$("dvfBody").addEventListener("click", (e) => {
+  const target = state.byId.get(e.target.closest("button[data-parcel]")?.dataset.parcel);
+  if (target) select(target);
+});
 
 function renderDvf(p) {
   const body = $("dvfBody");
@@ -436,7 +475,7 @@ function renderDvf(p) {
   const own = DVF.salesForParcel(state.dvf, p.id);
   let html = `<p class="muted">Ventes publiées de ${since} à ${until}.</p>`;
   html += own.length
-    ? `<h4>Sur cette parcelle</h4><ul class="sales">${own.map((m) => saleHtml(m)).join("")}</ul>`
+    ? `<h4>Sur cette parcelle</h4><ul class="sales">${own.map((m) => saleHtml(m, "", p.id)).join("")}</ul>`
     : "<p>Aucune vente enregistrée sur cette parcelle sur la période.</p>";
 
   const { radius, types, limit } = CONFIG.dvf.nearby;
@@ -447,7 +486,7 @@ function renderDvf(p) {
     html += `<p>${near.length} vente${near.length > 1 ? "s" : ""}` +
             (median ? ` · prix médian <b>${fmt(median)} €/m²</b> bâti (terrain inclus)` : "") + "</p>";
     html += `<ul class="sales">${near.slice(0, limit).map(({ m, dist }) =>
-      saleHtml(m, `<div class="sale__where muted">${esc(m.a || "Adresse non publiée")} · à ${dist} m</div>`)).join("")}</ul>`;
+      saleHtml(m, `<div class="sale__where muted">${esc(m.a || "Adresse non publiée")} · à ${dist} m</div>`, p.id)).join("")}</ul>`;
     for (const { m } of near) {
       L.circleMarker([m.lat, m.lon], {
         radius: 5, color: token("--panel"), weight: 1.5, fillColor: token("--dvf"), fillOpacity: 0.95,

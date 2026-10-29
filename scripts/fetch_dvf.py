@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
 """Prépare data/dvf-<INSEE>.json à partir des DVF géolocalisées (Etalab, data.gouv.fr).
 
-Usage : python3 scripts/fetch_dvf.py [code_insee]      (défaut : 44047, Couëron)
+Usage : python3 scripts/fetch_dvf.py [code_insee] [--depuis AAAA-MM-JJ]
+        (défaut : 44047, Couëron ; ventes depuis le 1er janvier 2014)
 
 Le fichier produit contient une entrée par mutation (vente) de la commune, avec les
 parcelles concernées. La page web l'indexe par parcelle pour afficher l'historique des
 ventes et les ventes voisines.
 
-Sources essayées, par ordre :
-  1. fichiers par commune et par année  : geo-dvf/latest/csv/<an>/communes/<dep>/<insee>.csv
-  2. fichiers par département et année   : geo-dvf/latest/csv/<an>/departements/<dep>.csv.gz
-  3. ressources annuelles du jeu de données sur data.gouv.fr (full.csv.gz), filtrées à la volée
-data.gouv.fr réorganise ces fichiers : si les trois échouent, téléchargez le fichier annuel
-à la main et passez-le avec --fichier (plusieurs fois possible).
+Sources, par ordre de priorité (les id_mutation changent d'une livraison à l'autre : une période
+n'est lue que dans une seule source, sinon les ventes seraient comptées deux fois) :
+  1. ressources full-<an>[-s1|-s2].csv.gz du jeu de données data.gouv.fr (API) : fichiers nationaux de
+     50 à 140 Mo filtrés à la volée sur la commune. C'est la livraison la plus récente : ventes tardives
+     et identifiants de parcelles à jour par rapport au cadastre actuel.
+  2. pour les périodes que 1. ne couvre pas (ou dont le téléchargement a échoué) : fichier par commune
+     puis par département, geo-dvf/latest/csv/<an>/communes/<dep>/<insee>.csv et .../departements/<dep>.csv.gz
+     (petits, rapides ; chemin annoncé comme archive, supprimé fin 2026 ; couvre encore janvier-juin 2021)
+  3. en dernier recours, si rien n'a été trouvé : ressources dont le nom n'est pas reconnu
+     (par exemple le fichier unique multi-années)
+data.gouv.fr réorganise ces fichiers : si tout échoue, téléchargez le fichier annuel à la main
+et passez-le avec --fichier (plusieurs fois possible).
+
+DVF n'est publié que pour les dernières années (depuis janvier 2021 à ce jour) : les années
+sans donnée sont signalées et ignorées.
 
 Python 3.8+, bibliothèque standard uniquement.
 """
@@ -30,6 +40,8 @@ import urllib.request
 
 BASE = "https://files.data.gouv.fr/geo-dvf/latest/csv"
 DATASET_API = "https://www.data.gouv.fr/api/1/datasets/demandes-de-valeurs-foncieres-geolocalisees/"
+DEPUIS = "2014-01-01"  # début de la période demandée par défaut
+RESOURCE_RE = re.compile(r"full-(\d{4})(?:-s([12]))?\.csv\.gz$")
 UA = {"User-Agent": "parcelles-coueron/0.1 (script de préparation DVF)"}
 
 
@@ -46,6 +58,7 @@ def read_rows(stream, gz):
 
 
 def rows_for_year(year, insee):
+    """Lignes DVF de la commune pour l'année, ou None si aucun fichier n'est publié."""
     dep = insee[:3] if insee.startswith("97") else insee[:2]
     candidates = [
         (f"{BASE}/{year}/communes/{dep}/{insee}.csv", False),
@@ -55,39 +68,56 @@ def rows_for_year(year, insee):
         try:
             with open_url(url) as resp:
                 print(f"  {year} : {url}")
-                yield from (r for r in read_rows(resp, gz) if r.get("code_commune") == insee)
-                return
+                return [r for r in read_rows(resp, gz) if r.get("code_commune") == insee]
         except urllib.error.HTTPError as e:
             if e.code != 404:
                 print(f"  {year} : {url} → HTTP {e.code}", file=sys.stderr)
         except urllib.error.URLError as e:
             print(f"  {year} : {url} → {e.reason}", file=sys.stderr)
+    return None
 
 
-def rows_from_dataset(insee):
-    """Dernier recours : ressources annuelles « full.csv.gz » listées par l'API data.gouv.fr."""
+def dataset_resources():
+    """Ressources CSV du jeu de données (API data.gouv.fr) : liste de (période, titre, url).
+
+    La période (début, fin) en dates ISO est déduite du nom « full-AAAA[-s1|-s2].csv.gz » ;
+    elle vaut None pour un fichier qui ne suit pas ce nommage (fichier unique multi-années…).
+    """
     try:
         with open_url(DATASET_API) as resp:
             meta = json.load(resp)
     except Exception as e:  # noqa: BLE001
         print(f"  API data.gouv.fr indisponible : {e}", file=sys.stderr)
-        return
+        return []
+    out = []
     for res in meta.get("resources", []):
         url = res.get("url") or ""
-        if url.endswith(".csv.gz") and re.search(r"20\d\d", res.get("title", "") + url):
-            print(f"  ressource : {res.get('title')} ({url})")
-            try:
-                with open_url(url) as resp:
-                    yield from (r for r in read_rows(resp, True) if r.get("code_commune") == insee)
-            except Exception as e:  # noqa: BLE001
-                print(f"    échec : {e}", file=sys.stderr)
+        if not url.endswith(".csv.gz"):
+            continue
+        m = RESOURCE_RE.search(url)
+        period = None
+        if m:
+            year, half = m.group(1), m.group(2)
+            period = (f"{year}-07-01" if half == "2" else f"{year}-01-01",
+                      f"{year}-06-30" if half == "1" else f"{year}-12-31")
+        out.append((period, res.get("title", ""), url))
+    return out
 
 
-def rows_from_files(paths, insee):
-    for path in paths:
-        print(f"  fichier local : {path}")
-        with open(path, "rb") as fh:
-            yield from (r for r in read_rows(fh, path.endswith(".gz")) if r.get("code_commune") == insee)
+def rows_from_resource(url, insee):
+    """Lignes de la commune dans une ressource nationale (lue en flux), ou None en cas d'échec."""
+    try:
+        with open_url(url) as resp:
+            return [r for r in read_rows(resp, True) if r.get("code_commune") == insee]
+    except Exception as e:  # noqa: BLE001
+        print(f"    échec : {e}", file=sys.stderr)
+        return None
+
+
+def rows_from_file(path, insee):
+    print(f"  fichier local : {path}")
+    with open(path, "rb") as fh:
+        return [r for r in read_rows(fh, path.endswith(".gz")) if r.get("code_commune") == insee]
 
 
 # ---------------------------------------------------------------- agrégation
@@ -161,12 +191,72 @@ def aggregate(rows):
     return out
 
 
+# ---------------------------------------------------------------- collecte
+
+def span(years):
+    """[2020, 2019, 2017] → « 2017, 2019–2020 »."""
+    runs = []
+    for y in sorted(years):
+        if runs and y == runs[-1][1] + 1:
+            runs[-1][1] = y
+        else:
+            runs.append([y, y])
+    return ", ".join(str(a) if a == b else f"{a}–{b}" for a, b in runs)
+
+
+def collect(insee, depuis):
+    """Récupère les lignes DVF de la commune depuis `depuis` (voir la docstring du module).
+
+    Retourne (lots, années sans donnée) : un lot de lignes par fichier source, à agréger séparément
+    car les id_mutation ne sont pas comparables d'un fichier à l'autre.
+    """
+    since = depuis.isoformat()
+    years = range(dt.date.today().year, depuis.year - 1, -1)
+    resources = dataset_resources()
+    batches, covered, got = [], [], set()
+
+    for period, title, url in resources:
+        if period is None or period[1] < since:
+            continue
+        print(f"  ressource : {title} ({url})")
+        rows = rows_from_resource(url, insee)
+        if rows is not None:
+            batches.append(rows)
+            covered.append(period)
+            got.add(int(period[0][:4]))
+
+    def has_period(start, end):
+        return any(p[0] <= start and end <= p[1] for p in covered)
+
+    for year in years:
+        if has_period(f"{year}-01-01", f"{year}-06-30") and has_period(f"{year}-07-01", f"{year}-12-31"):
+            continue  # année entièrement couverte par l'API
+        rows = rows_for_year(year, insee)
+        if rows is not None:
+            # Les ventes d'une période déjà lue dans l'API ne sont pas reprises : doublons sinon.
+            batches.append([r for r in rows
+                            if not any(p[0] <= r.get("date_mutation", "") <= p[1] for p in covered)])
+            got.add(year)
+
+    if not any(batches):
+        for period, title, url in resources:
+            if period is None:
+                print(f"  ressource : {title} ({url})")
+                rows = rows_from_resource(url, insee)
+                if rows is not None:
+                    batches.append(rows)
+        got.update(int(r["date_mutation"][:4]) for b in batches for r in b if r.get("date_mutation"))
+
+    return batches, [y for y in years if y not in got]
+
+
 # ---------------------------------------------------------------- programme
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("insee", nargs="?", default="44047")
-    ap.add_argument("--annees", type=int, default=7, help="nombre d'années à remonter (défaut 7)")
+    ap.add_argument("--depuis", type=dt.date.fromisoformat, default=dt.date.fromisoformat(DEPUIS),
+                    metavar="AAAA-MM-JJ", help=f"date de la plus ancienne vente conservée (défaut {DEPUIS})")
     ap.add_argument("--fichier", action="append", default=[],
                     help="CSV DVF géolocalisé déjà téléchargé (.csv ou .csv.gz) ; répétable")
     ap.add_argument("--sortie", default=None, help="chemin du JSON produit")
@@ -178,23 +268,23 @@ def main(argv=None):
 
     print(f"DVF pour la commune {insee}")
     if args.fichier:
-        rows = list(rows_from_files(args.fichier, insee))
+        batches, missing = [rows_from_file(path, insee) for path in args.fichier], []
     else:
-        this_year = dt.date.today().year
-        rows = []
-        for year in range(this_year, this_year - args.annees, -1):
-            rows.extend(rows_for_year(year, insee))
-        if not rows:
-            print("  aucun fichier par année trouvé, essai via l'API data.gouv.fr…")
-            rows = list(rows_from_dataset(insee))
+        batches, missing = collect(insee, args.depuis)
+    if missing:
+        print(f"  Pas de donnée DVF publiée pour {span(missing)} (DVF ne couvre que les dernières années).")
 
-    if not rows:
+    # Les fichiers annuels débordent parfois de la date demandée.
+    since = args.depuis.isoformat()
+    batches = [[r for r in b if (r.get("date_mutation") or since) >= since] for b in batches]
+
+    if not any(batches):
         print("Aucune donnée DVF récupérée. Téléchargez un fichier annuel sur\n"
               "https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres-geolocalisees\n"
               "puis relancez avec --fichier <chemin>.", file=sys.stderr)
         return 1
 
-    mutations = aggregate(rows)
+    mutations = sorted((m for b in batches for m in aggregate(b)), key=lambda m: m["d"], reverse=True)
     dates = sorted(m["d"] for m in mutations if m["d"])
     payload = {
         "meta": {

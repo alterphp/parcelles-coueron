@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  ringArea, geometryArea, centroid, distanceMeters, bearing, normalizeParcel, findParcelAt,
+  ringArea, geometryArea, centroid, distanceMeters, bearing, normalizeParcel, findParcelAt, labelFromId,
   filterParcels, sortParcels, listSections, toCSV, parseHash, buildHash, label,
 } from "../js/parcels.js";
 
@@ -32,6 +32,16 @@ test("distance et cap", () => {
   assert.ok(Math.abs(distanceMeters([LON, LAT], [LON, LAT + dLat]) - 20) < 0.2);
   assert.ok(Math.abs(bearing([LON, LAT], [LON, LAT + dLat]) - 0) < 0.5);
   assert.ok(Math.abs(bearing([LON, LAT], [LON + dLon, LAT]) - 90) < 0.5);
+});
+
+test("libellé d'une parcelle depuis son identifiant", () => {
+  assert.equal(labelFromId("44047000AB0012"), "AB 12");
+  assert.equal(labelFromId("44047000ZD0123"), "ZD 123");
+  assert.equal(labelFromId("44047000AB0000"), "AB 0000");   // numéro nul : conservé tel quel
+  assert.equal(labelFromId("X1"), "X1");                    // format inconnu : identifiant brut
+  assert.equal(labelFromId(undefined), "");
+  const p = normalizeParcel(feat({ id: "44047000AB0012", section: "AB", numero: "0012" }));
+  assert.equal(labelFromId(p.id), label(p));                // même rendu que la liste
 });
 
 test("contenance cadastrale prioritaire, sinon surface estimée", () => {

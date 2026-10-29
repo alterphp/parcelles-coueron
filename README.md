@@ -2,7 +2,7 @@
 
 Page web cartographique qui affiche les parcelles cadastrales de Couëron (INSEE 44047) répondant à un critère de surface, avec :
 
-- **fonds de carte** : satellite IGN (orthophoto), satellite Esri, Plan IGN, OpenStreetMap ;
+- **fonds de carte** : satellite IGN (orthophoto), satellite Esri, Plan IGN, OpenStreetMap ; le zoom est limité au zoom maximal du fond actif (19 pour tous aujourd'hui, au-delà les tuiles n'existent plus) ;
 - **couche cadastrale** IGN (Parcellaire Express : limites, numéros, bâti) superposable à n'importe quel fond, désactivée par défaut ; une fois activée, un clic sur n'importe quelle parcelle de la commune (éligible ou non) la sélectionne et ouvre son panneau de détails ;
 - **parcelles éligibles** en surbrillance, filtrées par surface min/max et section cadastrale ;
 - **repères ronds** au centre de chaque parcelle éligible pour les localiser dézoomé, masqués au-delà du zoom 17 (réglable dans `config.js`, `markers`) ;
@@ -66,9 +66,10 @@ data/                 Cadastre et DVF préparés localement (non versionnés)
 
 ### Lire les ventes DVF
 
-- DVF couvre les **ventes** (pas les donations ni successions) des 5 dernières années environ, mises à jour deux fois par an. Relancez `scripts/fetch_dvf.py` après chaque mise à jour.
+- DVF couvre les **ventes** (pas les donations ni successions), mises à jour deux fois par an. Relancez `scripts/fetch_dvf.py` après chaque mise à jour.
+- Le script demande les ventes **depuis le 1er janvier 2014** (`--depuis AAAA-MM-JJ` pour changer la date), mais Etalab / la DGFiP ne publient que les 5 dernières années environ : à ce jour, rien avant janvier 2021. Les années sans donnée sont signalées et ignorées ; la période réellement couverte figure dans `meta.periode` du fichier produit.
 - Le **prix au m²** n'est affiché que pour une vente d'un seul logement de surface connue. Il divise le prix total par la surface bâtie : la valeur du terrain y est incluse. C'est un repère de comparaison, pas une estimation.
-- data.gouv.fr réorganise la publication des fichiers DVF. Le script essaie les fichiers par commune, puis par département, puis les ressources annuelles du jeu de données. Si tout échoue, téléchargez un fichier annuel à la main et passez-le avec `--fichier chemin.csv.gz`.
+- Sources, par priorité : les **ressources annuelles ou semestrielles de data.gouv.fr** (livraison la plus récente : ventes tardives, parcelles à jour par rapport au cadastre actuel ; fichiers nationaux de 50 à 140 Mo, soit environ 3 minutes), puis, pour les périodes qu'elles ne couvrent pas (janvier-juin 2021), les fichiers par commune ou par département de l'ancien chemin `geo-dvf/latest`, annoncé comme supprimé fin 2026. Une période n'est lue que dans une seule source : les identifiants de vente changent d'une livraison à l'autre. Si tout échoue, téléchargez un fichier annuel à la main et passez-le avec `--fichier chemin.csv.gz`.
 
 ### Lire le zonage PLUm
 
