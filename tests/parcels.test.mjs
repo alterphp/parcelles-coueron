@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  ringArea, geometryArea, centroid, distanceMeters, bearing, normalizeParcel,
+  ringArea, geometryArea, centroid, distanceMeters, bearing, normalizeParcel, findParcelAt,
   filterParcels, sortParcels, listSections, toCSV, parseHash, buildHash, label,
 } from "../js/parcels.js";
 
@@ -39,6 +39,28 @@ test("contenance cadastrale prioritaire, sinon surface estimée", () => {
   assert.equal(a.surface, 812); assert.equal(a.estimated, false); assert.equal(label(a), "AB 12");
   const b = normalizeParcel(feat({ id: "44047000AB0013", section: "AB", numero: "0013" }));
   assert.equal(b.estimated, true); assert.ok(Math.abs(b.surface - 400) <= 4);
+});
+
+test("parcelle sous un point : voisine, trou, multi-polygone, hors parcelle", () => {
+  const shift = (dx) => square.map(([x, y]) => [x + dx * dLon, y]);
+  const hole = square.map(([x, y]) => [LON + (x - LON) / 2 + dLon / 4, LAT + (y - LAT) / 2 + dLat / 4]);
+  const A = normalizeParcel(feat({ id: "A" }));
+  const B = normalizeParcel(feat({ id: "B" }, shift(1)));
+  const C = normalizeParcel({ type: "Feature", properties: { id: "C" },
+    geometry: { type: "Polygon", coordinates: [shift(3), hole.map(([x, y]) => [x + 3 * dLon, y])] } });
+  const D = normalizeParcel({ type: "Feature", properties: { id: "D" },
+    geometry: { type: "MultiPolygon", coordinates: [[shift(5)], [shift(7)]] } });
+  const all = [A, B, C, D];
+  const at = (dx, dy = 0.5) => findParcelAt(all, [LON + dx * dLon, LAT + dy * dLat])?.id ?? null;
+
+  assert.equal(at(0.5), "A");
+  assert.equal(at(1.5), "B");   // la voisine, pas la première de la liste
+  assert.equal(at(3.1), "C");   // dans la parcelle, hors du trou
+  assert.equal(at(3.5), null);  // dans le trou
+  assert.equal(at(5.5), "D");
+  assert.equal(at(7.5), "D");   // second polygone du MultiPolygon
+  assert.equal(at(6.5), null);  // entre les deux polygones
+  assert.equal(at(0.5, 2), null); // hors de toute parcelle
 });
 
 const parcels = [

@@ -93,6 +93,36 @@ export function pointOnSurface(geometry) {
   return best ? [(best[0] + best[1]) / 2, y] : c;
 }
 
+const bboxCache = new WeakMap();
+
+/** Boîte englobante [minLon, minLat, maxLon, maxLat] de la parcelle (calculée une fois). */
+function bboxOf(parcel) {
+  let box = bboxCache.get(parcel);
+  if (!box) {
+    box = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const poly of polygonsOf(parcel.feature.geometry)) {
+      for (const [x, y] of poly[0]) {
+        if (x < box[0]) box[0] = x;
+        if (y < box[1]) box[1] = y;
+        if (x > box[2]) box[2] = x;
+        if (y > box[3]) box[3] = y;
+      }
+    }
+    bboxCache.set(parcel, box);
+  }
+  return box;
+}
+
+/** Parcelle contenant le point [lon, lat], ou null (hors commune, voirie, hors données). */
+export function findParcelAt(parcels, pt) {
+  for (const p of parcels) {
+    const [x0, y0, x1, y1] = bboxOf(p);
+    if (pt[0] < x0 || pt[0] > x1 || pt[1] < y0 || pt[1] > y1) continue;
+    if (polygonsOf(p.feature.geometry).some((poly) => pointInPolygon(pt, poly))) return p;
+  }
+  return null;
+}
+
 /** Distance en mètres entre deux points [lon, lat] (haversine). */
 export function distanceMeters([lon1, lat1], [lon2, lat2]) {
   const dLat = (lat2 - lat1) * RAD, dLon = (lon2 - lon1) * RAD;

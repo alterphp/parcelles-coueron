@@ -30,7 +30,7 @@ const state = {
 const map = L.map("map", { preferCanvas: true }).setView(CONFIG.commune.centre, CONFIG.commune.zoom);
 const bases = createBaseLayers();
 bases["Satellite IGN (orthophoto)"].addTo(map);
-const cadastre = createCadastreLayer().addTo(map);
+const cadastre = createCadastreLayer(); // désactivée par défaut, activable dans le sélecteur de couches
 
 const featureToParcel = new WeakMap();
 const eligibleLayer = L.geoJSON(null, {
@@ -38,7 +38,7 @@ const eligibleLayer = L.geoJSON(null, {
   onEachFeature: (feature, layer) => {
     const p = featureToParcel.get(feature);
     layer.bindTooltip(`${P.label(p)} · ${fmt(p.surface)} m²`, { sticky: true, className: "parcel-tip" });
-    layer.on("click", () => select(p, { fit: false }));
+    layer.on("click", (e) => { L.DomEvent.stopPropagation(e); select(p, { fit: false }); });
   },
 }).addTo(map);
 
@@ -61,11 +61,14 @@ const salesLayer = L.layerGroup().addTo(map);
 // Marqueurs des parcelles éligibles : un rond au centre de chaque parcelle, pour les repérer
 // quand la carte est dézoomée. Pane dédié au-dessus des contours ; en SVG pour que les clics
 // hors des ronds atteignent les parcelles en dessous. Masqués au-delà de CONFIG.markers.maxZoom.
+// Pas d'entrée dédiée dans le sélecteur : ils suivent la couche « Parcelles éligibles ».
 const markerPane = map.createPane("parcelMarkers");
 markerPane.style.zIndex = 450;
 markerPane.style.pointerEvents = "none";
 const markerRenderer = L.svg({ pane: "parcelMarkers" });
 const markerLayer = L.layerGroup().addTo(map);
+eligibleLayer.on("add", () => markerLayer.addTo(map));
+eligibleLayer.on("remove", () => map.removeLayer(markerLayer));
 
 function syncMarkerVisibility() {
   markerPane.style.display = map.getZoom() <= CONFIG.markers.maxZoom ? "" : "none";
@@ -76,7 +79,6 @@ syncMarkerVisibility();
 L.control.layers(bases, {
   "Plan cadastral IGN": cadastre,
   "Parcelles éligibles": eligibleLayer,
-  [`Marqueurs (zoom ≤ ${CONFIG.markers.maxZoom})`]: markerLayer,
   "Point de vue de la photo": viewpointLayer,
   "Zone PLUm de la parcelle": pluLayer,
   "Ventes voisines (DVF)": salesLayer,
@@ -216,7 +218,7 @@ function renderMarkers() {
     if (!p.center) continue;
     L.circleMarker([p.center[1], p.center[0]], style)
       .bindTooltip(`${P.label(p)} · ${fmt(p.surface)} m²`, { className: "parcel-tip" })
-      .on("click", () => select(p))
+      .on("click", (e) => { L.DomEvent.stopPropagation(e); select(p); })
       .addTo(markerLayer);
   }
 }
@@ -319,6 +321,14 @@ function select(p, { fit = true } = {}) {
   renderDvf(p);
   writeHash();
 }
+
+// Plan cadastral actif : un clic sur n'importe quelle parcelle de la commune la sélectionne,
+// éligible ou non. Les parcelles éligibles et leurs repères gèrent leurs propres clics.
+map.on("click", (e) => {
+  if (!map.hasLayer(cadastre)) return;
+  const p = P.findParcelAt(state.all, [e.latlng.lng, e.latlng.lat]);
+  if (p && p !== state.selected) select(p, { fit: false });
+});
 
 function closeStreet() {
   state.selected = null;

@@ -3,7 +3,7 @@
 Page web cartographique qui affiche les parcelles cadastrales de Couëron (INSEE 44047) répondant à un critère de surface, avec :
 
 - **fonds de carte** : satellite IGN (orthophoto), satellite Esri, Plan IGN, OpenStreetMap ;
-- **couche cadastrale** IGN (Parcellaire Express : limites, numéros, bâti) superposable à n'importe quel fond ;
+- **couche cadastrale** IGN (Parcellaire Express : limites, numéros, bâti) superposable à n'importe quel fond, désactivée par défaut ; une fois activée, un clic sur n'importe quelle parcelle de la commune (éligible ou non) la sélectionne et ouvre son panneau de détails ;
 - **parcelles éligibles** en surbrillance, filtrées par surface min/max et section cadastrale ;
 - **repères ronds** au centre de chaque parcelle éligible pour les localiser dézoomé, masqués au-delà du zoom 17 (réglable dans `config.js`, `markers`) ;
 - **aperçu de rue** de la parcelle sélectionnée : photo Panoramax la plus proche (avec sa position sur la carte) et Google Street View (intégré si une clé est configurée, sinon lien) ;
