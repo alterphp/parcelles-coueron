@@ -123,6 +123,12 @@ export function findParcelAt(parcels, pt) {
   return null;
 }
 
+/** Lien vers la parcelle dans OpenParcels, centré sur son point intérieur : …/fr?lat=…&lng=…&z=16.0&parcel=44150000BE0042 */
+export function openParcelsUrl({ id, center: [lon, lat] }, zoom = 16) {
+  return `https://openparcels.eu/fr?lat=${lat.toFixed(6)}&lng=${lon.toFixed(6)}&z=${zoom.toFixed(1)}` +
+    (id ? `&parcel=${encodeURIComponent(id)}` : "");
+}
+
 /** Distance en mètres entre deux points [lon, lat] (haversine). */
 export function distanceMeters([lon1, lat1], [lon2, lat2]) {
   const dLat = (lat2 - lat1) * RAD, dLon = (lon2 - lon1) * RAD;

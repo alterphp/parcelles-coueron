@@ -28,8 +28,12 @@ export const CONFIG = {
   // Ventes immobilières : fichier préparé par `python3 scripts/fetch_dvf.py`.
   dvf: {
     url: `data/dvf-${INSEE}.json`,
-    nearby: { radius: 300, types: ["Maison"], limit: 6 }, // ventes voisines affichées dans le panneau
+    nearby: { radius: 300, types: ["Maison"] }, // ventes voisines : toutes listées dans le panneau (zone défilante)
   },
+
+  // Adresse de la parcelle : géocodage inverse de la Géoplateforme IGN (BAN), sans clé.
+  // Au-delà de maxDistance mètres du centre de la parcelle, aucune adresse n'est affichée.
+  address: { api: "https://data.geopf.fr/geocodage", maxDistance: 100 },
 
   // Zonage PLUm : API Carto, module Géoportail de l'Urbanisme (IGN), sans clé.
   plu: { api: "https://apicarto.ign.fr/api/gpu" },

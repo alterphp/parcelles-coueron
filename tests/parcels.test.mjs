@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  ringArea, geometryArea, centroid, distanceMeters, bearing, normalizeParcel, findParcelAt, labelFromId,
+  ringArea, geometryArea, centroid, distanceMeters, bearing, normalizeParcel, findParcelAt, labelFromId, openParcelsUrl,
   filterParcels, sortParcels, listSections, toCSV, parseHash, buildHash, label,
 } from "../js/parcels.js";
 
@@ -42,6 +42,13 @@ test("libellé d'une parcelle depuis son identifiant", () => {
   assert.equal(labelFromId(undefined), "");
   const p = normalizeParcel(feat({ id: "44047000AB0012", section: "AB", numero: "0012" }));
   assert.equal(labelFromId(p.id), label(p));                // même rendu que la liste
+});
+
+test("lien OpenParcels : exemple fourni (coordonnées à 6 décimales, zoom 16.0, code parcelle)", () => {
+  const p = { id: "44150000BE0042", center: [-1.614392, 47.133919] };
+  assert.equal(openParcelsUrl(p), "https://openparcels.eu/fr?lat=47.133919&lng=-1.614392&z=16.0&parcel=44150000BE0042");
+  assert.equal(openParcelsUrl({ ...p, center: [-1.6, 47.1] }, 18), "https://openparcels.eu/fr?lat=47.100000&lng=-1.600000&z=18.0&parcel=44150000BE0042");
+  assert.ok(!openParcelsUrl({ id: "", center: [-1.6, 47.1] }).includes("parcel="));   // pas d'identifiant : on centre seulement
 });
 
 test("contenance cadastrale prioritaire, sinon surface estimée", () => {

@@ -95,6 +95,7 @@ a { color: var(--accent); }
 #map { grid-area: map; height: 100%; min-height: 0; background: var(--bg); }
 .leaflet-container { font: 13px/1.4 var(--font); }
 .leaflet-tooltip.parcel-tip { font-variant-numeric: tabular-nums; }
+.leaflet-tooltip.parcel-tip--selected { border-color: var(--select); font-weight: 600; }
 .legend { background: var(--panel); color: var(--fg); padding: 8px 10px; border-radius: var(--radius);
           box-shadow: 0 1px 4px rgb(0 0 0 / .25); display: grid; gap: 4px; font-size: 13px; }
 .legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px;
@@ -114,6 +115,7 @@ a { color: var(--accent); }
 .street__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
                 padding: 16px 18px 10px; }
 .street h2 { margin: 0; font-size: 18px; }
+.street__address { margin: 2px 0 0; font-size: 14px; }
 .street__meta { margin: 2px 0 0; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
 
 .tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 18px; gap: 4px; }
@@ -160,6 +162,7 @@ a { color: var(--accent); }
 .sale { padding: 8px 0; border-bottom: 1px solid var(--line); display: grid; gap: 2px; font-size: 14px;
         font-variant-numeric: tabular-nums; }
 .sale:last-child { border-bottom: 0; }
+.sales--scroll { max-height: min(50vh, 440px); overflow-y: auto; padding-right: 6px; }
 .sale__head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .sale__desc, .sale__where { font-size: 13px; }
 .sale__parcels { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; margin-top: 2px; }

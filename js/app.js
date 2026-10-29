@@ -6,6 +6,7 @@ import { createBaseLayers, createCadastreLayer } from "./layers.js";
 import { findPanoramax, googleEmbedUrl, googleLinkUrl } from "./streetview.js";
 import * as DVF from "./dvf.js";
 import { fetchPluZones, describeZone, gpuMapUrl } from "./plu.js";
+import { fetchAddress, addressLine, addressNote } from "./address.js";
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Number(n).toLocaleString("fr-FR");
@@ -22,6 +23,8 @@ const state = {
   selected: null,
   streetAbort: null,  // AbortController de la requête Panoramax en cours
   pluAbort: null,     // AbortController de la requête PLUm en cours
+  addressAbort: null, // AbortController de la requête d'adresse en cours
+  addresses: new Map(), // id de parcelle → adresse ({street, city, distance}) ou null si aucune à proximité
   dvf: undefined,     // index DVF : undefined = en cours de chargement, null = indisponible
 };
 
@@ -44,8 +47,9 @@ const eligibleLayer = L.geoJSON(null, {
   style: () => ({ color: token("--match"), weight: 1.5, fillColor: token("--match"), fillOpacity: 0.3 }),
   onEachFeature: (feature, layer) => {
     const p = featureToParcel.get(feature);
-    layer.bindTooltip(`${P.label(p)} · ${fmt(p.surface)} m²`, { sticky: true, className: "parcel-tip" });
+    layer.bindTooltip(() => tipHtml(p), { sticky: true, className: "parcel-tip" });
     layer.on("click", (e) => { L.DomEvent.stopPropagation(e); select(p, { fit: false }); });
+    layer.on("tooltipopen", () => { if (state.selected === p) layer.closeTooltip(); }); // elle a déjà son infobulle fixe
   },
 }).addTo(map);
 
@@ -53,6 +57,9 @@ const selectedLayer = L.geoJSON(null, {
   interactive: false,
   style: () => ({ color: token("--select"), weight: 3, fill: false }),
 }).addTo(map);
+
+// Infobulle fixe de la parcelle sélectionnée (référence, surface, adresse), posée sur son point intérieur.
+const selectedTip = L.tooltip({ permanent: true, direction: "top", offset: [0, -4], className: "parcel-tip parcel-tip--selected" });
 
 const viewpointLayer = L.layerGroup().addTo(map);
 
@@ -224,8 +231,9 @@ function renderMarkers() {
   for (const p of state.matches) {
     if (!p.center) continue;
     L.circleMarker([p.center[1], p.center[0]], style)
-      .bindTooltip(`${P.label(p)} · ${fmt(p.surface)} m²`, { className: "parcel-tip" })
+      .bindTooltip(() => tipHtml(p), { className: "parcel-tip" })
       .on("click", (e) => { L.DomEvent.stopPropagation(e); select(p); })
+      .on("tooltipopen", function () { if (state.selected === p) this.closeTooltip(); })
       .addTo(markerLayer);
   }
 }
@@ -321,6 +329,9 @@ function select(p, { fit = true } = {}) {
 
   $("streetTitle").textContent = `Parcelle ${P.label(p)}`;
   $("streetMeta").textContent = `${fmt(p.surface)} m²${p.estimated ? " (estimée)" : ""} · réf. ${p.id}`;
+  selectedTip.setLatLng([p.center[1], p.center[0]]).setContent(tipHtml(p));
+  if (!map.hasLayer(selectedTip)) selectedTip.addTo(map);
+  loadAddress(p);
   renderLinks(p);
   loadPanoramax(p);
   renderGoogle(p);
@@ -337,10 +348,47 @@ map.on("click", (e) => {
   if (p && p !== state.selected) select(p, { fit: false });
 });
 
+/** Contenu des infobulles : référence, surface et, si on la connaît déjà, adresse. */
+function tipHtml(p) {
+  const a = state.addresses.get(p.id);
+  return `${P.label(p)} · ${fmt(p.surface)} m²${a ? `<br>${esc(a.street)}` : ""}`;
+}
+
+function renderAddress(p) {
+  const a = state.addresses.get(p.id);
+  const line = $("streetAddress");
+  if (a) {
+    const note = addressNote(a);
+    line.innerHTML = `${esc(addressLine(a))}${note ? ` <span class="muted">· ${esc(note)}</span>` : ""}`;
+  } else {
+    line.innerHTML = `<span class="muted">Aucune adresse à moins de ${CONFIG.address.maxDistance} m.</span>`;
+  }
+  selectedTip.setContent(tipHtml(p));
+}
+
+async function loadAddress(p) {
+  state.addressAbort?.abort();
+  if (state.addresses.has(p.id)) return renderAddress(p);
+  const ctrl = new AbortController();
+  state.addressAbort = ctrl;
+  const line = $("streetAddress");
+  line.innerHTML = '<span class="muted">Recherche de l\'adresse…</span>';
+  try {
+    state.addresses.set(p.id, await fetchAddress(p.center, CONFIG.address, ctrl.signal));
+  } catch (e) {
+    if (!ctrl.signal.aborted) line.innerHTML = '<span class="muted">Adresse indisponible.</span>'; // pas mis en cache : nouvel essai à la prochaine sélection
+    return;
+  }
+  if (!ctrl.signal.aborted) renderAddress(p);
+}
+
 function closeStreet() {
   state.selected = null;
   state.streetAbort?.abort();
   state.pluAbort?.abort();
+  state.addressAbort?.abort();
+  selectedTip.remove();
+  $("streetAddress").textContent = "";
   selectedLayer.clearLayers();
   viewpointLayer.clearLayers();
   pluLayer.clearLayers();
@@ -362,6 +410,7 @@ function renderLinks(p) {
     "&l1=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes";
   const links = [
     ["Géoportail", geoportail],
+    ["OpenParcels", P.openParcelsUrl(p)],
     ["Google Maps", `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`],
     ["Street View", googleLinkUrl(p.center)],
   ];
@@ -414,6 +463,15 @@ async function loadPlu(p) {
 /* ---------------------------------------------------------- Ventes (DVF) */
 
 const MAX_SALE_PARCELS = 8; // pastilles affichées par vente (les ventes en bloc peuvent en citer des dizaines)
+
+/** « Parcelle CZ 316 » / « Parcelles CZ 316, CZ 317 + 2 » : section et numéro des parcelles d'une vente. */
+function saleParcelsText(m) {
+  const ids = m.p || [];
+  if (!ids.length) return "";
+  const more = ids.length - MAX_SALE_PARCELS;
+  return `Parcelle${ids.length > 1 ? "s" : ""} ${ids.slice(0, MAX_SALE_PARCELS).map(P.labelFromId).join(", ")}` +
+         (more > 0 ? ` + ${more}` : "");
+}
 
 /**
  * Parcelles d'une vente : un bouton pour celles du cadastre chargé (clic = les afficher sur la carte),
@@ -478,19 +536,20 @@ function renderDvf(p) {
     ? `<h4>Sur cette parcelle</h4><ul class="sales">${own.map((m) => saleHtml(m, "", p.id)).join("")}</ul>`
     : "<p>Aucune vente enregistrée sur cette parcelle sur la période.</p>";
 
-  const { radius, types, limit } = CONFIG.dvf.nearby;
+  const { radius, types } = CONFIG.dvf.nearby;
   const near = DVF.nearbySales(state.dvf, p.center, { radius, types, limit: 500, exclude: p.id });
   const median = DVF.medianPricePerM2(near);
   html += `<h4>${types.join(" et ")}s vendues à moins de ${radius} m</h4>`;
   if (near.length) {
     html += `<p>${near.length} vente${near.length > 1 ? "s" : ""}` +
             (median ? ` · prix médian <b>${fmt(median)} €/m²</b> bâti (terrain inclus)` : "") + "</p>";
-    html += `<ul class="sales">${near.slice(0, limit).map(({ m, dist }) =>
+    html += `<ul class="sales sales--scroll">${near.map(({ m, dist }) =>
       saleHtml(m, `<div class="sale__where muted">${esc(m.a || "Adresse non publiée")} · à ${dist} m</div>`, p.id)).join("")}</ul>`;
     for (const { m } of near) {
       L.circleMarker([m.lat, m.lon], {
         radius: 5, color: token("--panel"), weight: 1.5, fillColor: token("--dvf"), fillOpacity: 0.95,
-      }).bindTooltip(`${longDate(m.d)} · ${m.v ? euros(m.v) : "?"}<br>${esc(DVF.describeMutation(m))}`)
+      }).bindTooltip(`${longDate(m.d)} · ${m.v ? euros(m.v) : "?"}<br>${esc(DVF.describeMutation(m))}` +
+                     (m.p?.length ? `<br>${esc(saleParcelsText(m))}` : ""))
         .addTo(salesLayer);
     }
   } else {

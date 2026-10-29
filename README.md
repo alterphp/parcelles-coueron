@@ -6,6 +6,7 @@ Page web cartographique qui affiche les parcelles cadastrales de Couëron (INSEE
 - **couche cadastrale** IGN (Parcellaire Express : limites, numéros, bâti) superposable à n'importe quel fond, désactivée par défaut ; une fois activée, un clic sur n'importe quelle parcelle de la commune (éligible ou non) la sélectionne et ouvre son panneau de détails ;
 - **parcelles éligibles** en surbrillance, filtrées par surface min/max et section cadastrale ;
 - **repères ronds** au centre de chaque parcelle éligible pour les localiser dézoomé, masqués au-delà du zoom 17 (réglable dans `config.js`, `markers`) ;
+- **adresse** de la parcelle sélectionnée (adresse numérotée la plus proche, à 100 m au plus), dans le panneau de détails et dans l'infobulle fixe posée sur la parcelle ;
 - **aperçu de rue** de la parcelle sélectionnée : photo Panoramax la plus proche (avec sa position sur la carte) et Google Street View (intégré si une clé est configurée, sinon lien) ;
 - **urbanisme** de la parcelle sélectionnée : zone du PLUm de Nantes Métropole (code, libellé, type, date d'approbation, constructibilité indicative, lien vers le règlement) et contour de la zone sur la carte ;
 - **ventes DVF** : historique des ventes de la parcelle, ventes de maisons à moins de 300 m (avec prix médian au m² et repères sur la carte) ;
@@ -27,7 +28,7 @@ Sans copie locale, la page télécharge le cadastre directement depuis cadastre.
 Tests (sans dépendance) :
 
 ```sh
-node --test tests/parcels.test.mjs tests/dvf-plu.test.mjs   # logique de la page (Node ≥ 18)
+node --test tests/parcels.test.mjs tests/dvf-plu.test.mjs tests/address.test.mjs   # logique de la page (Node ≥ 18)
 python3 -m unittest discover -s tests                        # script de préparation DVF
 ```
 
@@ -57,6 +58,7 @@ data/                 Cadastre et DVF préparés localement (non versionnés)
 | Parcelles (géométrie + contenance) | [Cadastre Etalab](https://cadastre.data.gouv.fr/datasets/cadastre-etalab), GeoJSON par commune | non |
 | Orthophoto, Plan IGN, plan cadastral | [Géoplateforme IGN](https://geoservices.ign.fr/) — WMTS `data.geopf.fr` | non |
 | Satellite alternatif | Esri World Imagery | non (usage raisonnable) |
+| Adresse de la parcelle | [Géocodage inverse de la Géoplateforme IGN](https://geoservices.ign.fr/documentation/services/services-geoplateforme/geocodage) (Base Adresse Nationale) — `data.geopf.fr/geocodage/reverse` | non |
 | Photos de rue | [Panoramax](https://panoramax.fr/) — `api.panoramax.xyz/api/search` | non |
 | Zonage PLUm | [API Carto, module Géoportail de l'Urbanisme](https://apicarto.ign.fr/) — `api/gpu/zone-urba?geom=…` | non |
 | Ventes immobilières | [DVF géolocalisées](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres-geolocalisees) (Etalab / DGFiP), préparées par `scripts/fetch_dvf.py` | non |

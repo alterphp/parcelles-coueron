@@ -35,7 +35,7 @@ jobs:
 
       - name: Tests
         run: |
-          node --test tests/parcels.test.mjs tests/dvf-plu.test.mjs
+          node --test tests/parcels.test.mjs tests/dvf-plu.test.mjs tests/address.test.mjs
           python3 -m unittest discover -s tests
 
       - id: pages
