@@ -292,6 +292,10 @@ let debounce;
   clearTimeout(debounce);
   debounce = setTimeout(apply, 250);
 }));
+$("copyMin").addEventListener("click", () => {
+  $("max").value = $("min").value;
+  apply();
+});
 $("section").addEventListener("change", apply);
 $("sort").addEventListener("change", apply);
 $("filters").addEventListener("submit", (e) => { e.preventDefault(); apply(); });

@@ -17,7 +17,7 @@ export const CONFIG = {
     `https://cadastre.data.gouv.fr/data/etalab-cadastre/latest/geojson/communes/${DEPT}/${INSEE}/cadastre-${INSEE}-parcelles.json.gz`,
   ],
 
-  defaultFilter: { min: 400, max: 1000 },
+  defaultFilter: { min: 400, max: 600 },
   presets: [[300, 600], [600, 1000], [1000, 2000], [2000, null]],
   // Repères ronds au centre des parcelles éligibles, visibles jusqu'à ce niveau de zoom inclus
   // (au-delà, les contours suffisent). Rayon en pixels.
