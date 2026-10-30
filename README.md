@@ -6,8 +6,8 @@ Page web cartographique qui affiche les parcelles cadastrales de Couëron (INSEE
 - **couche cadastrale** IGN (Parcellaire Express : limites, numéros, bâti) superposable à n'importe quel fond, désactivée par défaut ; une fois activée, un clic sur n'importe quelle parcelle de la commune (éligible ou non) la sélectionne et ouvre son panneau de détails ;
 - **parcelles éligibles** en surbrillance, filtrées par surface min/max et section cadastrale ;
 - **repères ronds** au centre de chaque parcelle éligible pour les localiser dézoomé, masqués au-delà du zoom 17 (réglable dans `config.js`, `markers`) ;
-- **adresse** de la parcelle sélectionnée (adresse numérotée la plus proche, à 100 m au plus), dans le panneau de détails et dans l'infobulle fixe posée sur la parcelle ;
-- **aperçu de rue** de la parcelle sélectionnée : photo Panoramax la plus proche (avec sa position sur la carte) et Google Street View (intégré si une clé est configurée, sinon lien) ;
+- **adresse** de la parcelle sélectionnée (adresse numérotée la plus proche, à 100 m au plus), dans le panneau de détails ;
+- **liens** en bas du panneau de détails pour ouvrir la parcelle sélectionnée dans Géoportail, OpenParcels, Google Maps et Google Street View ;
 - **urbanisme** de la parcelle sélectionnée : zone du PLUm de Nantes Métropole (code, libellé, type, date d'approbation, constructibilité indicative, lien vers le règlement) et contour de la zone sur la carte ;
 - **ventes DVF** : historique des ventes de la parcelle, ventes de maisons à moins de 300 m (avec prix médian au m² et repères sur la carte) ;
 - liste triable, export CSV, et URL partageable (`#min=600&max=1000&section=AB&p=44047000AB0006`).
@@ -35,12 +35,11 @@ python3 -m unittest discover -s tests                        # script de prépar
 ## Structure
 
 ```
-index.html            Structure de la page (barre de filtres, carte, panneau d'aperçu rue)
+index.html            Structure de la page (barre de filtres, carte, panneau de détails)
 css/style.css         Styles, thème clair/sombre, mise en page mobile
-js/config.js          ⚙ Commune, sources de données, plages prédéfinies, clés — seul fichier à adapter
+js/config.js          ⚙ Commune, sources de données, plages prédéfinies — seul fichier à adapter
 js/parcels.js         Logique pure : surfaces, centroïdes, filtre, tri, CSV, état d'URL (testée)
 js/layers.js          Fonds de carte et couche cadastrale (WMTS Géoplateforme IGN, Esri, OSM)
-js/streetview.js      Recherche Panoramax (API STAC) et URLs Google Street View
 js/plu.js             Zonage PLUm via l'API Carto GPU, libellés et constructibilité indicative
 js/dvf.js             Index des ventes DVF par parcelle, ventes voisines, prix au m² (testé)
 js/app.js             Chargement des données, rendu carte/liste, sélection, panneau de la parcelle
@@ -62,10 +61,8 @@ resources/dvf-historique/  Archive zip DVF 2014-2023 de Couëron, lue par fetch_
 | Orthophoto, Plan IGN, plan cadastral | [Géoplateforme IGN](https://geoservices.ign.fr/) — WMTS `data.geopf.fr` | non |
 | Satellite alternatif | Esri World Imagery | non (usage raisonnable) |
 | Adresse de la parcelle | [Géocodage inverse de la Géoplateforme IGN](https://geoservices.ign.fr/documentation/services/services-geoplateforme/geocodage) (Base Adresse Nationale) — `data.geopf.fr/geocodage/reverse` | non |
-| Photos de rue | [Panoramax](https://panoramax.fr/) — `api.panoramax.xyz/api/search` | non |
 | Zonage PLUm | [API Carto, module Géoportail de l'Urbanisme](https://apicarto.ign.fr/) — `api/gpu/zone-urba?geom=…` | non |
 | Ventes immobilières | [DVF géolocalisées](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres-geolocalisees) (Etalab / DGFiP), préparées par `scripts/fetch_dvf.py` | non |
-| Street View intégré | Google [Maps Embed API](https://developers.google.com/maps/documentation/embed/embedding-map), mode `streetview` | **oui** |
 
 **Surface utilisée** : la *contenance* cadastrale (surface fiscale, en m²). Quand elle manque, la surface est calculée sur la géométrie et signalée « est. » dans la liste et « estimée » dans le panneau. Ce n'est ni la surface habitable ni forcément l'emprise d'une propriété, qui peut regrouper plusieurs parcelles.
 
@@ -81,14 +78,6 @@ resources/dvf-historique/  Archive zip DVF 2014-2023 de Couëron, lue par fetch_
 
 - La zone est celle qui contient un point situé **à l'intérieur** de la parcelle. Une grande parcelle peut être à cheval sur deux zones : vérifiez sur le Géoportail de l'Urbanisme (lien dans le panneau).
 - La mention de constructibilité est déduite du type de zone (U, AU, A, N). **Seul le règlement de la zone fait foi** (hauteurs, emprise, reculs, servitudes, OAP…).
-
-### Activer Google Street View intégré
-
-1. Dans Google Cloud Console, activez **Maps Embed API** et créez une clé.
-2. Restreignez-la par référent HTTP au domaine du site.
-3. Renseignez `streetView.googleEmbedApiKey` dans `js/config.js`.
-
-L'iframe n'est chargée que lorsque l'onglet Google est ouvert. Sans clé, l'onglet propose un lien qui ouvre Street View dans un nouvel onglet.
 
 ## Publier sur GitHub Pages
 
@@ -110,7 +99,6 @@ Le workflow `.github/workflows/pages.yml` lance les tests, retélécharge le cad
 - **Dépôt public** requis pour Pages avec un compte gratuit (privé possible avec GitHub Pro). Le site publié est toujours public, même depuis un dépôt privé.
 - **Données non versionnées** : elles sont reconstruites à chaque publication. Si une source ne répond pas, le workflow réutilise la version déjà en ligne et le signale par un avertissement dans le journal de l'Action.
 - **Mise en veille** : GitHub désactive les tâches planifiées d'un dépôt public après 60 jours sans activité, et prévient par e-mail. Il suffit de la réactiver dans l'onglet Actions, ou de pousser un commit.
-- **Clé Google** : `js/config.js` est publié tel quel. Si vous y mettez une clé Maps Embed API, restreignez-la au référent `https://<votre-compte>.github.io/*` dans Google Cloud Console.
 - La date de la dernière publication des données est visible à `…/data-version.txt`.
 
 ## Adapter à une autre commune
@@ -122,7 +110,6 @@ Dans `js/config.js`, changez `INSEE`, `commune.nom` et `commune.centre`, puis la
 Les tests ont été faits avec un jeu de parcelles fictif et des services simulés ; les points suivants n'ont pas pu être contrôlés contre les vrais serveurs :
 
 - **CORS de cadastre.data.gouv.fr** : si le téléchargement direct échoue dans le navigateur, utilisez la copie locale (`scripts/fetch-data.sh`) — c'est de toute façon recommandé en production.
-- **Format du lien Panoramax** (`#focus=pic&pic=<id>&map=19/lat/lon`) et noms des images (`assets.sd`, `thumb`, `hd`) : à confirmer sur une parcelle réelle.
 - **Style de la couche cadastrale** (`PCI vecteur`) : si les tuiles ne s'affichent pas, consulter le GetCapabilities WMTS de `data.geopf.fr` pour le nom exact du style.
 - **API Carto GPU** : appel GET avec `geom` et noms des champs (`libelle`, `libelong`, `typezone`, `datappro`, `urlfic`) ; lien vers la carte du Géoportail de l'Urbanisme.
 - **Emplacements des fichiers DVF** : voir « Lire les ventes DVF ».

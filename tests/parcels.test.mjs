@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  ringArea, geometryArea, centroid, distanceMeters, bearing, normalizeParcel, findParcelAt, labelFromId, openParcelsUrl,
+  ringArea, geometryArea, centroid, distanceMeters, normalizeParcel, findParcelAt, labelFromId, openParcelsUrl,
   filterParcels, sortParcels, listSections, toCSV, parseHash, buildHash, label,
 } from "../js/parcels.js";
 
@@ -28,10 +28,8 @@ test("centroïde au centre du carré", () => {
   assert.ok(Math.abs(x - (LON + dLon / 2)) < 1e-9 && Math.abs(y - (LAT + dLat / 2)) < 1e-9);
 });
 
-test("distance et cap", () => {
+test("distance entre deux points", () => {
   assert.ok(Math.abs(distanceMeters([LON, LAT], [LON, LAT + dLat]) - 20) < 0.2);
-  assert.ok(Math.abs(bearing([LON, LAT], [LON, LAT + dLat]) - 0) < 0.5);
-  assert.ok(Math.abs(bearing([LON, LAT], [LON + dLon, LAT]) - 90) < 0.5);
 });
 
 test("libellé d'une parcelle depuis son identifiant", () => {

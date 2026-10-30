@@ -1,4 +1,4 @@
-/* Mise en page : barre latérale de filtres | carte | panneau d'aperçu rue (apparaît à la sélection). */
+/* Mise en page : barre latérale de filtres | carte | panneau de détails (apparaît à la sélection). */
 :root {
   --bg: #f3f5f2;
   --panel: #ffffff;
@@ -36,7 +36,7 @@ body {
   grid-template-columns: 340px minmax(0, 1fr);
   grid-template-areas: "side map";
 }
-body.has-street { grid-template-columns: 340px minmax(0, 1fr) 400px; grid-template-areas: "side map street"; }
+body.has-parcel-details { grid-template-columns: 340px minmax(0, 1fr) 400px; grid-template-areas: "side map details"; }
 
 [hidden] { display: none !important; }
 .visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -97,7 +97,6 @@ a { color: var(--accent); }
 #map { grid-area: map; height: 100%; min-height: 0; background: var(--bg); }
 .leaflet-container { font: 13px/1.4 var(--font); }
 .leaflet-tooltip.parcel-tip { font-variant-numeric: tabular-nums; }
-.leaflet-tooltip.parcel-tip--selected { border-color: var(--select); font-weight: 600; }
 .legend { background: var(--panel); color: var(--fg); padding: 8px 10px; border-radius: var(--radius);
           box-shadow: 0 1px 4px rgb(0 0 0 / .25); display: grid; gap: 4px; font-size: 13px; }
 .legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px;
@@ -109,37 +108,20 @@ a { color: var(--accent); }
 .legend .l-plu { border-color: var(--plu); border-style: dashed; }
 .legend .l-sale { border-radius: 50%; width: 10px; border-color: var(--panel);
                   background: var(--dvf); box-shadow: 0 0 0 1px var(--dvf); }
-.legend .l-photo { border-radius: 50%; width: 10px; border-color: var(--select); background: var(--panel); }
 
-/* --- Panneau aperçu rue --------------------------------------------------- */
-.street { grid-area: street; background: var(--panel); border-left: 1px solid var(--line);
+/* --- Panneau de détails --------------------------------------------------- */
+.parcel-details { grid-area: details; background: var(--panel); border-left: 1px solid var(--line);
           display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
-.street__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+.parcel-details__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
                 padding: 16px 18px 10px; }
-.street h2 { margin: 0; font-size: 18px; }
-.street__address { margin: 2px 0 0; font-size: 14px; }
-.street__meta { margin: 2px 0 0; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.parcel-details h2 { margin: 0; font-size: 18px; }
+.parcel-details__address { margin: 2px 0 0; font-size: 14px; }
+.parcel-details__meta { margin: 2px 0 0; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
 
-.tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 18px; gap: 4px; }
-.tabs button { font: inherit; font-size: 14px; cursor: pointer; background: none; color: var(--muted);
-               border: 0; border-bottom: 2px solid transparent; padding: 8px 6px; margin-bottom: -1px; }
-.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
-
-.pane { padding: 14px 18px; display: grid; gap: 10px; align-content: start; }
-.pane p { margin: 0; font-size: 14px; }
-.pane .muted { color: var(--muted); }
-.shot { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: var(--radius);
-        background: var(--bg); display: block; }
-.gsv { width: 100%; aspect-ratio: 4 / 3; border: 0; border-radius: var(--radius); background: var(--bg); }
-.skeleton { width: 100%; aspect-ratio: 16 / 10; border-radius: var(--radius); background: var(--bg);
-            animation: pulse 1.2s ease-in-out infinite alternate; }
-@keyframes pulse { to { opacity: .5; } }
-@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
-
-.street__links { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 18px 18px; margin-top: auto; }
-.street__links a { font-size: 14px; text-decoration: none; border: 1px solid var(--line);
+.parcel-details__links { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 18px 18px; margin-top: auto; }
+.parcel-details__links a { font-size: 14px; text-decoration: none; border: 1px solid var(--line);
                    border-radius: var(--radius); padding: 6px 10px; color: var(--fg); }
-.street__links a:hover { border-color: var(--accent); }
+.parcel-details__links a:hover { border-color: var(--accent); }
 
 /* --- Blocs Urbanisme et Ventes ------------------------------------------ */
 .block { padding: 14px 18px; border-top: 1px solid var(--line); display: grid; gap: 8px; align-content: start; }
@@ -177,13 +159,13 @@ button.parcel-ref:hover { background: var(--accent); color: var(--panel); }
 
 /* --- Écrans étroits : carte en haut, panneaux empilés ---------------------- */
 @media (max-width: 900px) {
-  body, body.has-street {
+  body, body.has-parcel-details {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 55vh auto auto;
-    grid-template-areas: "map" "street" "side";
+    grid-template-areas: "map" "details" "side";
     height: auto;
   }
   html { height: auto; }
-  .sidebar, .street { border: 0; border-top: 1px solid var(--line); }
+  .sidebar, .parcel-details { border: 0; border-top: 1px solid var(--line); }
   .list { max-height: 50vh; }
 }

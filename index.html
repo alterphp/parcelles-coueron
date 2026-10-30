@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Parcelles de Couëron</title>
-  <meta name="description" content="Carte des parcelles cadastrales de Couëron filtrées par surface, avec fonds satellite, plan cadastral et aperçu de rue.">
+  <meta name="description" content="Carte des parcelles cadastrales de Couëron filtrées par surface, avec fonds satellite, plan cadastral, urbanisme et ventes.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -56,23 +56,15 @@
 
   <main id="map" aria-label="Carte"></main>
 
-  <section class="street" id="street" hidden aria-labelledby="streetTitle">
-    <header class="street__head">
+  <section class="parcel-details" id="parcelDetails" hidden aria-labelledby="parcelDetailsTitle">
+    <header class="parcel-details__head">
       <div>
-        <h2 id="streetTitle">—</h2>
-        <p class="street__address" id="streetAddress"></p>
-        <p class="street__meta" id="streetMeta"></p>
+        <h2 id="parcelDetailsTitle">—</h2>
+        <p class="parcel-details__address" id="parcelDetailsAddress"></p>
+        <p class="parcel-details__meta" id="parcelDetailsMeta"></p>
       </div>
-      <button type="button" class="btn btn--icon" id="closeStreet" aria-label="Fermer l'aperçu">✕</button>
+      <button type="button" class="btn btn--icon" id="closeParcelDetails" aria-label="Fermer le panneau">✕</button>
     </header>
-
-    <div class="tabs" role="tablist">
-      <button type="button" role="tab" id="tabPnx" aria-controls="panePnx" aria-selected="true">Panoramax</button>
-      <button type="button" role="tab" id="tabGsv" aria-controls="paneGsv" aria-selected="false">Google Street View</button>
-    </div>
-
-    <div class="pane" id="panePnx" role="tabpanel" aria-labelledby="tabPnx"></div>
-    <div class="pane" id="paneGsv" role="tabpanel" aria-labelledby="tabGsv" hidden></div>
 
     <section class="block" aria-labelledby="pluTitle">
       <h3 id="pluTitle">Urbanisme · PLUm</h3>
@@ -84,7 +76,7 @@
       <div id="dvfBody"></div>
     </section>
 
-    <nav class="street__links" id="streetLinks" aria-label="Ouvrir ailleurs"></nav>
+    <nav class="parcel-details__links" id="parcelDetailsLinks" aria-label="Ouvrir ailleurs"></nav>
   </section>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>

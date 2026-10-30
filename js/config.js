@@ -1,4 +1,4 @@
-// Configuration du projet : c'est le seul fichier à modifier pour changer de commune ou de clés.
+// Configuration du projet : c'est le seul fichier à modifier pour changer de commune ou de sources.
 
 const INSEE = "44047"; // Couëron
 const DEPT = INSEE.slice(0, 2); // ⚠ Corse (2A/2B) et DOM (971…) : adapter le code département.
@@ -37,16 +37,4 @@ export const CONFIG = {
 
   // Zonage PLUm : API Carto, module Géoportail de l'Urbanisme (IGN), sans clé.
   plu: { api: "https://apicarto.ign.fr/api/gpu" },
-
-  streetView: {
-    // Panoramax : imagerie de rue libre (IGN / OpenStreetMap France), sans clé.
-    panoramax: {
-      api: "https://api.panoramax.xyz",
-      viewer: "https://api.panoramax.xyz",
-      radius: 60, // mètres autour du centre de la parcelle
-    },
-    // Google Street View intégré : renseigner une clé « Maps Embed API ».
-    // Sans clé, l'onglet Google propose un lien qui ouvre Street View dans un nouvel onglet.
-    googleEmbedApiKey: "",
-  },
 };

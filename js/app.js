@@ -1,9 +1,8 @@
-// Point d'entrée : chargement des données, filtres, carte, liste et panneau d'aperçu rue.
+// Point d'entrée : chargement des données, filtres, carte, liste et panneau de détails.
 /* global L */
 import { CONFIG } from "./config.js";
 import * as P from "./parcels.js";
 import { createBaseLayers, createCadastreLayer } from "./layers.js";
-import { findPanoramax, googleEmbedUrl, googleLinkUrl } from "./streetview.js";
 import * as DVF from "./dvf.js";
 import { fetchPluZones, describeZone, gpuMapUrl } from "./plu.js";
 import { fetchAddress, addressLine, addressNote } from "./address.js";
@@ -21,7 +20,6 @@ const state = {
   matches: [],        // parcelles éligibles, triées
   byId: new Map(),
   selected: null,
-  streetAbort: null,  // AbortController de la requête Panoramax en cours
   pluAbort: null,     // AbortController de la requête PLUm en cours
   addressAbort: null, // AbortController de la requête d'adresse en cours
   addresses: new Map(), // id de parcelle → adresse ({street, city, distance}) ou null si aucune à proximité
@@ -49,7 +47,6 @@ const eligibleLayer = L.geoJSON(null, {
     const p = featureToParcel.get(feature);
     layer.bindTooltip(() => tipHtml(p), { sticky: true, className: "parcel-tip" });
     layer.on("click", (e) => { L.DomEvent.stopPropagation(e); select(p, { fit: false }); });
-    layer.on("tooltipopen", () => { if (state.selected === p) layer.closeTooltip(); }); // elle a déjà son infobulle fixe
   },
 }).addTo(map);
 
@@ -57,11 +54,6 @@ const selectedLayer = L.geoJSON(null, {
   interactive: false,
   style: () => ({ color: token("--select"), weight: 3, fill: false }),
 }).addTo(map);
-
-// Infobulle fixe de la parcelle sélectionnée (référence, surface, adresse), posée sur son point intérieur.
-const selectedTip = L.tooltip({ permanent: true, direction: "top", offset: [0, -4], className: "parcel-tip parcel-tip--selected" });
-
-const viewpointLayer = L.layerGroup().addTo(map);
 
 // Contour de la zone PLUm contenant la parcelle sélectionnée (non cliquable).
 const pluLayer = L.geoJSON(null, {
@@ -93,7 +85,6 @@ syncMarkerVisibility();
 L.control.layers(bases, {
   "Plan cadastral IGN": cadastre,
   "Parcelles éligibles": eligibleLayer,
-  "Point de vue de la photo": viewpointLayer,
   "Zone PLUm de la parcelle": pluLayer,
   "Ventes voisines (DVF)": salesLayer,
 }, { collapsed: window.matchMedia("(max-width: 900px)").matches }).addTo(map);
@@ -105,7 +96,6 @@ legend.onAdd = () => {
   div.innerHTML = '<span><i class="l-match"></i>Parcelle éligible</span>' +
                   '<span><i class="l-marker"></i>Repère de parcelle éligible</span>' +
                   '<span><i class="l-select"></i>Parcelle sélectionnée</span>' +
-                  '<span><i class="l-photo"></i>Position de la photo</span>' +
                   '<span><i class="l-plu"></i>Zone PLUm</span>' +
                   '<span><i class="l-sale"></i>Vente voisine (DVF)</span>';
   return div;
@@ -233,7 +223,6 @@ function renderMarkers() {
     L.circleMarker([p.center[1], p.center[0]], style)
       .bindTooltip(() => tipHtml(p), { className: "parcel-tip" })
       .on("click", (e) => { L.DomEvent.stopPropagation(e); select(p); })
-      .on("tooltipopen", function () { if (state.selected === p) this.closeTooltip(); })
       .addTo(markerLayer);
   }
 }
@@ -316,8 +305,8 @@ function select(p, { fit = true } = {}) {
   state.selected = p;
   selectedLayer.clearLayers().addData(p.feature);
 
-  document.body.classList.add("has-street");
-  $("street").hidden = false;
+  document.body.classList.add("has-parcel-details");
+  $("parcelDetails").hidden = false;
   map.invalidateSize();
   if (fit) {
     map.fitBounds(selectedLayer.getBounds(), { maxZoom: 19, padding: [60, 60] });
@@ -331,14 +320,10 @@ function select(p, { fit = true } = {}) {
   const row = document.querySelector(`.list button[data-id="${CSS.escape(p.id)}"]`);
   if (row) { row.setAttribute("aria-current", "true"); row.scrollIntoView({ block: "nearest" }); }
 
-  $("streetTitle").textContent = `Parcelle ${P.label(p)}`;
-  $("streetMeta").textContent = `${fmt(p.surface)} m²${p.estimated ? " (estimée)" : ""} · réf. ${p.id}`;
-  selectedTip.setLatLng([p.center[1], p.center[0]]).setContent(tipHtml(p));
-  if (!map.hasLayer(selectedTip)) selectedTip.addTo(map);
+  $("parcelDetailsTitle").textContent = `Parcelle ${P.label(p)}`;
+  $("parcelDetailsMeta").textContent = `${fmt(p.surface)} m²${p.estimated ? " (estimée)" : ""} · réf. ${p.id}`;
   loadAddress(p);
   renderLinks(p);
-  loadPanoramax(p);
-  renderGoogle(p);
   loadPlu(p);
   renderDvf(p);
   writeHash();
@@ -360,14 +345,13 @@ function tipHtml(p) {
 
 function renderAddress(p) {
   const a = state.addresses.get(p.id);
-  const line = $("streetAddress");
+  const line = $("parcelDetailsAddress");
   if (a) {
     const note = addressNote(a);
     line.innerHTML = `${esc(addressLine(a))}${note ? ` <span class="muted">· ${esc(note)}</span>` : ""}`;
   } else {
     line.innerHTML = `<span class="muted">Aucune adresse à moins de ${CONFIG.address.maxDistance} m.</span>`;
   }
-  selectedTip.setContent(tipHtml(p));
 }
 
 async function loadAddress(p) {
@@ -375,7 +359,7 @@ async function loadAddress(p) {
   if (state.addresses.has(p.id)) return renderAddress(p);
   const ctrl = new AbortController();
   state.addressAbort = ctrl;
-  const line = $("streetAddress");
+  const line = $("parcelDetailsAddress");
   line.innerHTML = '<span class="muted">Recherche de l\'adresse…</span>';
   try {
     state.addresses.set(p.id, await fetchAddress(p.center, CONFIG.address, ctrl.signal));
@@ -386,26 +370,22 @@ async function loadAddress(p) {
   if (!ctrl.signal.aborted) renderAddress(p);
 }
 
-function closeStreet() {
+function closeParcelDetails() {
   state.selected = null;
-  state.streetAbort?.abort();
   state.pluAbort?.abort();
   state.addressAbort?.abort();
-  selectedTip.remove();
-  $("streetAddress").textContent = "";
+  $("parcelDetailsAddress").textContent = "";
   selectedLayer.clearLayers();
-  viewpointLayer.clearLayers();
   pluLayer.clearLayers();
   salesLayer.clearLayers();
-  $("street").hidden = true;
-  document.body.classList.remove("has-street");
-  $("paneGsv").replaceChildren();
+  $("parcelDetails").hidden = true;
+  document.body.classList.remove("has-parcel-details");
   map.invalidateSize();
   document.querySelectorAll('.list button[aria-current="true"]').forEach((b) => b.removeAttribute("aria-current"));
   writeHash();
 }
-$("closeStreet").addEventListener("click", closeStreet);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.selected) closeStreet(); });
+$("closeParcelDetails").addEventListener("click", closeParcelDetails);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.selected) closeParcelDetails(); });
 
 function renderLinks(p) {
   const [lon, lat] = p.center;
@@ -416,9 +396,9 @@ function renderLinks(p) {
     ["Géoportail", geoportail],
     ["OpenParcels", P.openParcelsUrl(p)],
     ["Google Maps", `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`],
-    ["Street View", googleLinkUrl(p.center)],
+    ["Street View", `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}`],
   ];
-  $("streetLinks").replaceChildren(...links.map(([text, href]) => {
+  $("parcelDetailsLinks").replaceChildren(...links.map(([text, href]) => {
     const a = document.createElement("a");
     a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = `${text} ↗`;
     return a;
@@ -565,99 +545,6 @@ function renderDvf(p) {
     html += "<p>Aucune vente comparable dans ce rayon.</p>";
   }
   body.innerHTML = html;
-}
-
-/* ---------------------------------------------------------- Aperçu rue */
-
-async function loadPanoramax(p) {
-  const pane = $("panePnx");
-  state.streetAbort?.abort();
-  const ctrl = new AbortController();
-  state.streetAbort = ctrl;
-  viewpointLayer.clearLayers();
-  pane.innerHTML = '<div class="skeleton"></div><p class="muted">Recherche de la photo de rue la plus proche…</p>';
-
-  try {
-    const photo = await findPanoramax(p.center, CONFIG.streetView.panoramax, ctrl.signal);
-    if (ctrl.signal.aborted) return;
-    if (!photo) {
-      pane.innerHTML = `<p>Aucune photo Panoramax à moins de ${CONFIG.streetView.panoramax.radius} m de cette parcelle.</p>` +
-                       '<p class="muted">Essayez l\'onglet Google Street View.</p>';
-      return;
-    }
-    const date = photo.date
-      ? new Date(photo.date).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-      : "date inconnue";
-    pane.innerHTML = "";
-    if (photo.img) {
-      const a = document.createElement("a");
-      a.href = photo.viewerUrl; a.target = "_blank"; a.rel = "noopener";
-      const img = document.createElement("img");
-      img.className = "shot"; img.src = photo.img; img.loading = "lazy";
-      img.alt = `Vue de la rue près de la parcelle ${P.label(p)}`;
-      a.append(img);
-      pane.append(a);
-    }
-    const info = document.createElement("p");
-    info.innerHTML = `Photo prise à <b>${photo.distance} m</b> de la parcelle, ${date}.`;
-    const open = document.createElement("p");
-    open.innerHTML = `<a href="${photo.viewerUrl}" target="_blank" rel="noopener">Ouvrir la vue immersive Panoramax ↗</a>`;
-    pane.append(info, open);
-
-    // Point de vue sur la carte : position de la photo et ligne vers la parcelle
-    const from = [photo.position[1], photo.position[0]];
-    const to = [p.center[1], p.center[0]];
-    L.polyline([from, to], { color: token("--select"), weight: 2, dashArray: "4 4", interactive: false }).addTo(viewpointLayer);
-    L.circleMarker(from, { radius: 6, color: token("--select"), weight: 2, fillColor: token("--panel"), fillOpacity: 1 })
-      .bindTooltip("Position de la photo")
-      .addTo(viewpointLayer);
-  } catch (e) {
-    if (e.name === "AbortError") return;
-    pane.innerHTML = `<p>Le service Panoramax ne répond pas (${e.message}).</p>`;
-  }
-}
-
-function renderGoogle(p) {
-  const pane = $("paneGsv");
-  const key = CONFIG.streetView.googleEmbedApiKey;
-  if (key) {
-    // L'iframe n'est créée que si l'onglet est visible, pour ne pas consommer de quota inutilement.
-    pane.dataset.src = googleEmbedUrl(key, p.center);
-    if (!pane.hidden) mountGoogleFrame();
-    else pane.replaceChildren();
-  } else {
-    delete pane.dataset.src;
-    pane.innerHTML =
-      `<p>Ouvrez Google Street View au plus près de la parcelle :</p>
-       <p><a class="btn btn--primary" href="${googleLinkUrl(p.center)}" target="_blank" rel="noopener">Voir dans Street View ↗</a></p>
-       <p class="muted">Pour afficher Street View directement ici, ajoutez une clé « Maps Embed API » dans <code>js/config.js</code>.</p>`;
-  }
-}
-
-function mountGoogleFrame() {
-  const pane = $("paneGsv");
-  if (!pane.dataset.src || pane.querySelector("iframe")?.src === pane.dataset.src) return;
-  const frame = document.createElement("iframe");
-  frame.className = "gsv";
-  frame.src = pane.dataset.src;
-  frame.loading = "lazy";
-  frame.allowFullscreen = true;
-  frame.referrerPolicy = "no-referrer-when-downgrade";
-  frame.title = "Google Street View";
-  pane.replaceChildren(frame);
-}
-
-/* --------------------------------------------------------------- Onglets */
-
-const tabs = [["tabPnx", "panePnx"], ["tabGsv", "paneGsv"]];
-for (const [tabId, paneId] of tabs) {
-  $(tabId).addEventListener("click", () => {
-    for (const [t, pn] of tabs) {
-      $(t).setAttribute("aria-selected", String(t === tabId));
-      $(pn).hidden = pn !== paneId;
-    }
-    if (paneId === "paneGsv") mountGoogleFrame();
-  });
 }
 
 /* ---------------------------------------------------------------- Démarrage */

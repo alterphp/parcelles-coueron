@@ -136,14 +136,6 @@ export function distanceMeters([lon1, lat1], [lon2, lat2]) {
   return 2 * EARTH_RADIUS * Math.asin(Math.sqrt(h));
 }
 
-/** Cap en degrés (0 = nord, sens horaire) de `from` vers `to`, points [lon, lat]. */
-export function bearing([lon1, lat1], [lon2, lat2]) {
-  const y = Math.sin((lon2 - lon1) * RAD) * Math.cos(lat2 * RAD);
-  const x = Math.cos(lat1 * RAD) * Math.sin(lat2 * RAD) -
-            Math.sin(lat1 * RAD) * Math.cos(lat2 * RAD) * Math.cos((lon2 - lon1) * RAD);
-  return (Math.atan2(y, x) / RAD + 360) % 360;
-}
-
 /**
  * Transforme une feature Etalab « parcelles » en objet métier.
  * Propriétés Etalab : id (14 car.), commune, prefixe, section, numero, contenance (m²)…
