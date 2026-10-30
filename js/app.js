@@ -540,6 +540,11 @@ function renderDvf(p) {
   const near = DVF.nearbySales(state.dvf, p.center, { radius, types, limit: 500, exclude: p.id });
   const median = DVF.medianPricePerM2(near);
   html += `<h4>${types.join(" et ")}s vendues à moins de ${radius} m</h4>`;
+  const geoFrom = state.dvf.meta.geolocalisees_depuis; // l'historique archivé n'a pas de coordonnées
+  if (geoFrom) {
+    html += `<p class="muted">Ventes géolocalisées depuis ${monthYear(geoFrom)} seulement : ` +
+            "les ventes antérieures n'ont pas de coordonnées.</p>";
+  }
   if (near.length) {
     html += `<p>${near.length} vente${near.length > 1 ? "s" : ""}` +
             (median ? ` · prix médian <b>${fmt(median)} €/m²</b> bâti (terrain inclus)` : "") + "</p>";

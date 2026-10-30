@@ -46,8 +46,11 @@ js/dvf.js             Index des ventes DVF par parcelle, ventes voisines, prix a
 js/app.js             Chargement des données, rendu carte/liste, sélection, panneau de la parcelle
 scripts/fetch-data.sh Téléchargement du cadastre Etalab pour une commune
 scripts/fetch_dvf.py  Préparation des ventes DVF d'une commune (Python, bibliothèque standard)
+scripts/dvf_historique.py        Lecture de l'archive DVF 2014-2023 d'une commune (schéma des DVF géolocalisées)
+scripts/split_dvf_historique.py  Archive les DVF nationaux (2014-2023) d'un département, un fichier par commune
 tests/                Tests unitaires (node:test et unittest)
 data/                 Cadastre et DVF préparés localement (non versionnés)
+resources/dvf-historique/  Archive zip DVF 2014-2023 de Couëron, lue par fetch_dvf.py (voir son README)
 .github/workflows/    Publication sur GitHub Pages avec mise à jour mensuelle des données
 ```
 
@@ -70,6 +73,7 @@ data/                 Cadastre et DVF préparés localement (non versionnés)
 
 - DVF couvre les **ventes** (pas les donations ni successions), mises à jour deux fois par an. Relancez `scripts/fetch_dvf.py` après chaque mise à jour.
 - Le script demande les ventes **depuis le 1er janvier 2014** (`--depuis AAAA-MM-JJ` pour changer la date), mais Etalab / la DGFiP ne publient que les 5 dernières années environ : à ce jour, rien avant janvier 2021. Les années sans donnée sont signalées et ignorées ; la période réellement couverte figure dans `meta.periode` du fichier produit.
+- **Historique 2014-2023.** Les ventes jusqu'au 31/12/2023 viennent de l'archive `resources/dvf-historique/dvf-<INSEE>.zip` (fichiers DGFiP archivés, Couëron seule est versionnée) ; l'API n'est interrogée que pour les ventes **à partir du 1er janvier 2024** (date lue dans le `meta.json` de l'archive et rappelée dans `meta.historique.jusqu_au`). Le JSON `data/dvf-44047.json` est recréé à chaque déploiement, il n'est pas versionné. Ces ventes anciennes **n'ont pas de coordonnées** : elles figurent dans l'historique de leur parcelle mais pas dans les ventes voisines ni dans le prix médian, ce que la page indique. `--sans-historique` ignore l'archive.
 - Le **prix au m²** n'est affiché que pour une vente d'un seul logement de surface connue. Il divise le prix total par la surface bâtie : la valeur du terrain y est incluse. C'est un repère de comparaison, pas une estimation.
 - Sources, par priorité : les **ressources annuelles ou semestrielles de data.gouv.fr** (livraison la plus récente : ventes tardives, parcelles à jour par rapport au cadastre actuel ; fichiers nationaux de 50 à 140 Mo, soit environ 3 minutes), puis, pour les périodes qu'elles ne couvrent pas (janvier-juin 2021), les fichiers par commune ou par département de l'ancien chemin `geo-dvf/latest`, annoncé comme supprimé fin 2026. Une période n'est lue que dans une seule source : les identifiants de vente changent d'une livraison à l'autre. Si tout échoue, téléchargez un fichier annuel à la main et passez-le avec `--fichier chemin.csv.gz`.
 
@@ -130,3 +134,8 @@ Les tests ont été faits avec un jeu de parcelles fictif et des services simul�
 - Afficher les **prescriptions et servitudes** du PLUm (API Carto : `prescription-surf`, `assiette-sup-s`) : espaces boisés classés, zones inondables (PPRI Loire), etc.
 - Filtrer les parcelles par **type de zone PLUm** (n'afficher que les zones U).
 - Regrouper les parcelles contiguës d'un même compte de propriété (donnée non publique : nécessite les fichiers fonciers).
+
+
+## Données DVF
+
+Les données facilement trouvables correspondent aux 5 dernières années (glissantes). Cependant des archives des données précédemment publiées sont disponibles (ex: http://data.cquest.org/dgfip_dvf/202504/).

@@ -8,7 +8,12 @@ Le fichier produit contient une entrée par mutation (vente) de la commune, avec
 parcelles concernées. La page web l'indexe par parcelle pour afficher l'historique des
 ventes et les ventes voisines.
 
-Sources, par ordre de priorité (les id_mutation changent d'une livraison à l'autre : une période
+Historique : si resources/dvf-historique/dvf-<INSEE>.zip existe (voir split_dvf_historique.py), les
+ventes jusqu'à la date « couvert_jusqu_au » de son meta.json en proviennent (DVF DGFiP archivées,
+sans coordonnées) et les sources ci-dessous ne sont interrogées que pour les ventes postérieures.
+--sans-historique l'ignore.
+
+Sources de l'API, par ordre de priorité (les id_mutation changent d'une livraison à l'autre : une période
 n'est lue que dans une seule source, sinon les ventes seraient comptées deux fois) :
   1. ressources full-<an>[-s1|-s2].csv.gz du jeu de données data.gouv.fr (API) : fichiers nationaux de
      50 à 140 Mo filtrés à la volée sur la commune. C'est la livraison la plus récente : ventes tardives
@@ -22,7 +27,7 @@ data.gouv.fr réorganise ces fichiers : si tout échoue, téléchargez le fichie
 et passez-le avec --fichier (plusieurs fois possible).
 
 DVF n'est publié que pour les dernières années (depuis janvier 2021 à ce jour) : les années
-sans donnée sont signalées et ignorées.
+sans donnée, avant comme après l'historique, sont signalées et ignorées.
 
 Python 3.8+, bibliothèque standard uniquement.
 """
@@ -38,6 +43,10 @@ import sys
 import urllib.error
 import urllib.request
 
+import dvf_historique
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HISTORIQUE = os.path.join(ROOT, "resources", "dvf-historique")  # dvf-<INSEE>.zip
 BASE = "https://files.data.gouv.fr/geo-dvf/latest/csv"
 DATASET_API = "https://www.data.gouv.fr/api/1/datasets/demandes-de-valeurs-foncieres-geolocalisees/"
 DEPUIS = "2014-01-01"  # début de la période demandée par défaut
@@ -250,6 +259,30 @@ def collect(insee, depuis):
     return batches, [y for y in years if y not in got]
 
 
+# ---------------------------------------------------------------- historique
+
+def historique(insee, depuis):
+    """Ventes de l'archive resources/dvf-historique/dvf-<INSEE>.zip, à partir de `depuis`.
+
+    Retourne (meta.json de l'archive, lignes au schéma géolocalisé, première date à demander à l'API) :
+    le lendemain de « couvert_jusqu_au ». Sans archive, ou si `depuis` lui est postérieur,
+    retourne (None, [], depuis).
+    """
+    chemin = os.path.join(HISTORIQUE, f"dvf-{insee}.zip")
+    if not os.path.exists(chemin):
+        return None, [], depuis
+    meta, rows = dvf_historique.charger(chemin, insee)
+    jusqu_au = dt.date.fromisoformat(meta["couvert_jusqu_au"])
+    if depuis > jusqu_au:
+        return None, [], depuis
+    debut, fin = depuis.isoformat(), jusqu_au.isoformat()
+    rows = [r for r in rows if debut <= r["date_mutation"] <= fin]
+    api_depuis = jusqu_au + dt.timedelta(days=1)
+    print(f"  historique : {chemin} (ventes jusqu'au {fin}, {len(rows)} lignes) ; "
+          f"l'API n'est interrogée qu'à partir du {api_depuis}")
+    return meta, rows, api_depuis
+
+
 # ---------------------------------------------------------------- programme
 
 def main(argv=None):
@@ -259,32 +292,36 @@ def main(argv=None):
                     metavar="AAAA-MM-JJ", help=f"date de la plus ancienne vente conservée (défaut {DEPUIS})")
     ap.add_argument("--fichier", action="append", default=[],
                     help="CSV DVF géolocalisé déjà téléchargé (.csv ou .csv.gz) ; répétable")
+    ap.add_argument("--sans-historique", action="store_true",
+                    help="ignore l'archive resources/dvf-historique : toutes les ventes viennent de l'API")
     ap.add_argument("--sortie", default=None, help="chemin du JSON produit")
     args = ap.parse_args(argv)
 
     insee = args.insee
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    out_path = args.sortie or os.path.join(root, "data", f"dvf-{insee}.json")
+    out_path = args.sortie or os.path.join(ROOT, "data", f"dvf-{insee}.json")
 
     print(f"DVF pour la commune {insee}")
+    hist_meta, hist_rows, depuis = (None, [], args.depuis) if args.sans_historique \
+        else historique(insee, args.depuis)
     if args.fichier:
         batches, missing = [rows_from_file(path, insee) for path in args.fichier], []
     else:
-        batches, missing = collect(insee, args.depuis)
+        batches, missing = collect(insee, depuis)
     if missing:
         print(f"  Pas de donnée DVF publiée pour {span(missing)} (DVF ne couvre que les dernières années).")
 
     # Les fichiers annuels débordent parfois de la date demandée.
-    since = args.depuis.isoformat()
+    since = depuis.isoformat()
     batches = [[r for r in b if (r.get("date_mutation") or since) >= since] for b in batches]
 
     if not any(batches):
-        print("Aucune donnée DVF récupérée. Téléchargez un fichier annuel sur\n"
+        print(f"Aucune donnée DVF récupérée à partir du {since}. Téléchargez un fichier annuel sur\n"
               "https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres-geolocalisees\n"
               "puis relancez avec --fichier <chemin>.", file=sys.stderr)
         return 1
 
-    mutations = sorted((m for b in batches for m in aggregate(b)), key=lambda m: m["d"], reverse=True)
+    anciennes = aggregate(hist_rows)
+    mutations = sorted(anciennes + [m for b in batches for m in aggregate(b)], key=lambda m: m["d"], reverse=True)
     dates = sorted(m["d"] for m in mutations if m["d"])
     payload = {
         "meta": {
@@ -296,6 +333,13 @@ def main(argv=None):
         },
         "mutations": mutations,
     }
+    if hist_meta:
+        payload["meta"]["historique"] = {
+            "source": "DVF DGFiP archivées (resources/dvf-historique), sans coordonnées",
+            "jusqu_au": hist_meta["couvert_jusqu_au"],
+            "mutations": len(anciennes),
+        }
+        payload["meta"]["geolocalisees_depuis"] = since
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))

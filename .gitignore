@@ -1,2 +1,7 @@
 data/
 node_modules/
+# DVF historique : seuls le README et l'archive de Couëron sont versionnés. Le zip du département
+# et les .txt par commune restent en local (adresses et prix de toutes les communes).
+resources/dvf-historique/*
+!resources/dvf-historique/README.md
+!resources/dvf-historique/dvf-44047.zip

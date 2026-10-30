@@ -33,8 +33,16 @@ def write_csv(path, gz):
         fh.write(data)
 
 
+def sans_archive_historique(test):
+    """Isole le test de resources/dvf-historique : main() n'y trouve aucune archive."""
+    patcher = mock.patch.object(fetch_dvf, "HISTORIQUE", os.path.join(tempfile.mkdtemp(), "vide"))
+    patcher.start()
+    test.addCleanup(patcher.stop)
+
+
 class AggregateTest(unittest.TestCase):
     def setUp(self):
+        sans_archive_historique(self)
         self.tmp = tempfile.mkdtemp()
 
     def run_script(self, gz):
@@ -171,6 +179,7 @@ class CollectTest(unittest.TestCase):
     def test_ids_identiques_dans_deux_sources_ne_fusionnent_pas(self):
         """Les id_mutation sont des compteurs propres à chaque livraison : deux ventes distinctes
         portant le même id dans deux fichiers doivent rester deux ventes."""
+        sans_archive_historique(self)
         batches = [[sale("2025-1", "2025-03-01", "100000", "44047000AB0001")],
                    [sale("2025-1", "2026-02-01", "250000", "44047000ZD0009")]]
         with mock.patch.object(fetch_dvf, "collect", lambda insee, depuis: (batches, [])):
