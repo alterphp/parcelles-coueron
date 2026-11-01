@@ -47,6 +47,7 @@ scripts/fetch-data.sh Téléchargement du cadastre Etalab pour une commune
 scripts/fetch_dvf.py  Préparation des ventes DVF d'une commune (Python, bibliothèque standard)
 scripts/dvf_historique.py        Lecture de l'archive DVF 2014-2023 d'une commune (schéma des DVF géolocalisées)
 scripts/split_dvf_historique.py  Archive les DVF nationaux (2014-2023) d'un département, un fichier par commune
+scripts/fetch_dvf_historique.py  Télécharge ces DVF nationaux (data.cquest.org) puis appelle le précédent
 tests/                Tests unitaires (node:test et unittest)
 data/                 Cadastre et DVF préparés localement (non versionnés)
 resources/dvf-historique/  Archive zip DVF 2014-2023 de Couëron, lue par fetch_dvf.py (voir son README)

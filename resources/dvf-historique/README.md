@@ -72,6 +72,9 @@ est lue dans **une seule** livraison.
 | 2018 – 2020 | `202204` (avril 2022) | `valeursfoncieres-AAAA.txt` |
 | 2021 – 2023 | `202504` (avril 2025) | `valeursfoncieres-AAAA.txt.zip` (contient `ValeursFoncieres-AAAA.txt`) |
 
+Ce tableau est celui de `LIVRAISONS` dans `scripts/fetch_dvf_historique.py` : pour une nouvelle plage
+d'années, ajouter une ligne aux deux (voir « Régénérer »).
+
 L'année 2018 de la livraison `201904` est incomplète (fichier national d'environ 30 % plus petit que
 dans `202204`) : elle n'est pas utilisée. Pour 2015 à 2017, les fichiers nationaux de `201904`
 diffèrent de moins de 1 % en taille de ceux des livraisons suivantes ; quelques ventes tardives
@@ -138,11 +141,28 @@ parcelles et prix. Mesures prises : archives compressées et zip du département
 ## Régénérer
 
 ```sh
-# télécharger les fichiers (≈ 3 Go) dans un dossier de travail, décompresser les .zip de 202504, puis :
+python3 scripts/fetch_dvf_historique.py --commune 44047
+```
+
+Télécharge les fichiers nationaux de la table « Origine » (≈ 3 Go, ≈ 3,5 Go de disque libre), dézippe ceux
+de `202504`, puis appelle `scripts/split_dvf_historique.py`. Produit `dvf-44.zip` et `dvf-44047.zip` ici.
+Les fichiers téléchargés sont supprimés à la fin ; `--travail DOSSIER` les garde (un téléchargement
+interrompu reprend où il s'était arrêté, un fichier complet n'est pas retéléchargé). Les autres options
+(`--departement`, `--sortie`, `--commune` répétable, `--couvert-jusqu-au`) sont celles de `split_dvf_historique.py`.
+
+**Ajouter une plage d'années** (nouvelle livraison de l'archive) : ajouter une ligne à `LIVRAISONS` dans
+`scripts/fetch_dvf_historique.py`, avec le dossier de la livraison, la première et la dernière année lues
+et le modèle du nom de fichier (`.zip` à la fin : fichier à dézipper), puis la même ligne au tableau
+« Origine ». Le script refuse une année présente dans deux lignes et une plage qui ne suit pas la précédente.
+`couvert_jusqu_au` avance de lui-même avec la dernière année.
+
+À la main, avec des fichiers déjà téléchargés (dézipper ceux de `202504`) :
+
+```sh
 python3 scripts/split_dvf_historique.py \
   201904/valeursfoncieres-201{4,5,6,7}.txt 202204/valeursfoncieres-20{18,19,20}.txt \
   202504/ValeursFoncieres-202{1,2,3}.txt --commune 44047
 ```
 
-Produit `dvf-44.zip` et `dvf-44047.zip` ici. Le script prend quelques minutes, la compression des
-107 Mo en étant l'essentiel ; il accepte `--departement`, `--sortie`, `--commune` (répétable) et `--couvert-jusqu-au`.
+Le découpage prend quelques minutes, la compression des 107 Mo en étant l'essentiel ; `split_dvf_historique.py`
+accepte `--departement`, `--sortie`, `--commune` (répétable) et `--couvert-jusqu-au`.
